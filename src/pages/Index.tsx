@@ -1,17 +1,20 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Auth } from "@/components/Auth";
 import { ChatInterface } from "@/components/ChatInterface";
 import { KnowledgeBase } from "@/components/KnowledgeBase";
+import { ConversationList } from "@/components/ConversationList";
+import { supabase } from "@/integrations/supabase/client";
+import { Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
-import { LogOut, Brain } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Brain, Menu } from "lucide-react";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const Index = () => {
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [userKnowledge, setUserKnowledge] = useState<any[]>([]);
-  const { toast } = useToast();
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -19,6 +22,7 @@ const Index = () => {
       setLoading(false);
       if (session) {
         fetchUserKnowledge();
+        createOrLoadDefaultConversation(session.user.id);
       }
     });
 
@@ -28,11 +32,53 @@ const Index = () => {
       setSession(session);
       if (session) {
         fetchUserKnowledge();
+        createOrLoadDefaultConversation(session.user.id);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const createOrLoadDefaultConversation = async (userId: string) => {
+    // Load most recent conversation
+    const { data: conversations } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("is_archived", false)
+      .order("updated_at", { ascending: false })
+      .limit(1);
+
+    if (conversations && conversations.length > 0) {
+      setActiveConversationId(conversations[0].id);
+    } else {
+      // Create new conversation if none exists
+      const { data: newConv } = await supabase
+        .from("conversations")
+        .insert({ user_id: userId, title: "New Conversation" })
+        .select()
+        .single();
+      
+      if (newConv) {
+        setActiveConversationId(newConv.id);
+      }
+    }
+  };
+
+  const handleNewConversation = async () => {
+    if (!session?.user) return;
+
+    const { data: newConv } = await supabase
+      .from("conversations")
+      .insert({ user_id: session.user.id, title: "New Conversation" })
+      .select()
+      .single();
+
+    if (newConv) {
+      setActiveConversationId(newConv.id);
+    }
+    setMobileMenuOpen(false);
+  };
 
   const fetchUserKnowledge = async () => {
     const { data } = await supabase
@@ -44,61 +90,78 @@ const Index = () => {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    toast({
-      title: "Signed out",
-      description: "Come back soon!",
-    });
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <Brain className="w-16 h-16 mx-auto text-primary animate-pulse" />
-          <p className="text-muted-foreground">Initializing Topher...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return <Auth />;
-  }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card/50 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <Brain className="w-8 h-8 text-primary" />
-            <h1 className="text-2xl font-bold">TOPHER</h1>
-          </div>
-          <Button
-            variant="ghost"
-            onClick={handleSignOut}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Sign Out
-          </Button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6">
-        <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4 sm:gap-6 h-[calc(100vh-100px)] sm:h-[calc(100vh-120px)]">
-          {/* Chat Interface - Takes 2 columns on large screens, full width on mobile */}
-          <div className="lg:col-span-2 h-[60vh] lg:h-full order-1">
-            <ChatInterface userKnowledge={userKnowledge} />
-          </div>
-
-          {/* Knowledge Base - Takes 1 column on large screens, collapsible on mobile */}
-          <div className="h-[35vh] lg:h-full order-2">
-            <KnowledgeBase onKnowledgeUpdate={fetchUserKnowledge} />
+      {loading ? (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center space-y-4">
+            <Brain className="w-12 h-12 mx-auto animate-pulse text-primary" />
+            <p className="text-muted-foreground">Loading...</p>
           </div>
         </div>
-      </main>
+      ) : !session ? (
+        <Auth />
+      ) : (
+        <div className="container mx-auto p-4 min-h-screen">
+          <header className="mb-6 flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              {/* Mobile menu button */}
+              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                <SheetTrigger asChild className="lg:hidden">
+                  <Button variant="ghost" size="icon">
+                    <Menu className="w-5 h-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="p-0 w-80">
+                  <div className="h-full">
+                    <ConversationList
+                      activeConversationId={activeConversationId}
+                      onConversationSelect={(id) => {
+                        setActiveConversationId(id);
+                        setMobileMenuOpen(false);
+                      }}
+                      onNewConversation={handleNewConversation}
+                    />
+                  </div>
+                </SheetContent>
+              </Sheet>
+
+              <Brain className="w-8 h-8 text-primary animate-pulse" />
+              <h1 className="text-2xl lg:text-3xl font-bold">Topher AI</h1>
+            </div>
+            <Button onClick={handleSignOut} variant="outline">
+              Sign Out
+            </Button>
+          </header>
+
+          <div className="grid grid-cols-1 lg:grid-cols-6 gap-4 h-[calc(100vh-120px)]">
+            {/* Desktop conversation list */}
+            <div className="hidden lg:block lg:col-span-1">
+              <ConversationList
+                activeConversationId={activeConversationId}
+                onConversationSelect={setActiveConversationId}
+                onNewConversation={handleNewConversation}
+              />
+            </div>
+
+            {/* Chat interface */}
+            <div className="lg:col-span-3">
+              <ChatInterface 
+                conversationId={activeConversationId}
+                userKnowledge={userKnowledge}
+                onTitleGenerated={() => {}}
+              />
+            </div>
+
+            {/* Knowledge base */}
+            <div className="lg:col-span-2">
+              <KnowledgeBase onKnowledgeUpdate={fetchUserKnowledge} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Send, Bot, User, ArrowDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { DownloadButton } from "./DownloadButton";
 
 interface Message {
   role: "user" | "assistant";
@@ -14,10 +15,16 @@ interface Message {
 }
 
 interface ChatInterfaceProps {
+  conversationId: string | null;
   userKnowledge: any[];
+  onTitleGenerated?: (title: string) => void;
 }
 
-export const ChatInterface = ({ userKnowledge }: ChatInterfaceProps) => {
+export const ChatInterface = ({ 
+  conversationId, 
+  userKnowledge,
+  onTitleGenerated 
+}: ChatInterfaceProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,8 +33,16 @@ export const ChatInterface = ({ userKnowledge }: ChatInterfaceProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  // Load chat history on mount
+  // Load chat history when conversation changes
   useEffect(() => {
+    if (!conversationId) {
+      setMessages([{
+        role: "assistant",
+        content: "Hello! I'm Topher, your AI assistant. How can I help you today?",
+      }]);
+      return;
+    }
+
     const loadChatHistory = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -35,8 +50,9 @@ export const ChatInterface = ({ userKnowledge }: ChatInterfaceProps) => {
       const { data, error } = await supabase
         .from("chat_messages")
         .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: true });
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true })
+        .limit(50);
 
       if (!error && data && data.length > 0) {
         setMessages(data.map(msg => ({
@@ -44,16 +60,20 @@ export const ChatInterface = ({ userKnowledge }: ChatInterfaceProps) => {
           content: msg.content,
         })));
       } else {
-        // Show welcome message only if no history
         setMessages([{
           role: "assistant",
           content: "Hello! I'm Topher, your AI assistant. How can I help you today?",
         }]);
       }
+
+      // Scroll to bottom when conversation loads
+      setTimeout(() => {
+        scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
     };
 
     loadChatHistory();
-  }, []);
+  }, [conversationId]);
 
   // Smart auto-scroll: only scroll if user is near bottom
   useEffect(() => {
@@ -80,10 +100,25 @@ export const ChatInterface = ({ userKnowledge }: ChatInterfaceProps) => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const generateTitle = async (firstMessage: string) => {
+    const title = firstMessage.slice(0, 50) + (firstMessage.length > 50 ? "..." : "");
+    if (conversationId && onTitleGenerated) {
+      const { error } = await supabase
+        .from("conversations")
+        .update({ title })
+        .eq("id", conversationId);
+      
+      if (!error) {
+        onTitleGenerated(title);
+      }
+    }
+  };
+
   const sendMessage = async () => {
-    if (!input.trim() || loading) return;
+    if (!input.trim() || loading || !conversationId) return;
 
     const userMessage: Message = { role: "user", content: input };
+    const userInput = input;
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setLoading(true);
@@ -94,9 +129,15 @@ export const ChatInterface = ({ userKnowledge }: ChatInterfaceProps) => {
       if (user) {
         await supabase.from("chat_messages").insert({
           user_id: user.id,
+          conversation_id: conversationId,
           role: "user",
-          content: input,
+          content: userInput,
         });
+
+        // Generate title from first message
+        if (messages.length <= 1) {
+          await generateTitle(userInput);
+        }
       }
 
       // Get AI response
@@ -104,6 +145,7 @@ export const ChatInterface = ({ userKnowledge }: ChatInterfaceProps) => {
         body: {
           messages: [...messages, userMessage],
           userKnowledge,
+          conversationId,
         },
       });
 
@@ -120,6 +162,7 @@ export const ChatInterface = ({ userKnowledge }: ChatInterfaceProps) => {
       if (user) {
         await supabase.from("chat_messages").insert({
           user_id: user.id,
+          conversation_id: conversationId,
           role: "assistant",
           content: data.reply,
         });
@@ -134,6 +177,43 @@ export const ChatInterface = ({ userKnowledge }: ChatInterfaceProps) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const detectDownloadableContent = (content: string): { filename: string; mimeType: string } | null => {
+    // Detect code blocks with language
+    const codeMatch = content.match(/```(\w+)/);
+    if (codeMatch) {
+      const lang = codeMatch[1];
+      const extensions: Record<string, string> = {
+        typescript: "ts",
+        javascript: "js",
+        python: "py",
+        java: "java",
+        cpp: "cpp",
+        html: "html",
+        css: "css",
+        json: "json",
+        xml: "xml",
+        sql: "sql",
+      };
+      return {
+        filename: `code.${extensions[lang] || "txt"}`,
+        mimeType: "text/plain",
+      };
+    }
+
+    // Detect structured documents
+    if (content.includes("# Product Requirements Document") || content.includes("# PRD")) {
+      return { filename: "prd.md", mimeType: "text/markdown" };
+    }
+    if (content.includes("CONTRACT") || content.includes("AGREEMENT")) {
+      return { filename: "contract.txt", mimeType: "text/plain" };
+    }
+    if (content.includes("## Proposal") || content.includes("# Proposal")) {
+      return { filename: "proposal.md", mimeType: "text/markdown" };
+    }
+
+    return null;
   };
 
   return (
@@ -170,11 +250,22 @@ export const ChatInterface = ({ userKnowledge }: ChatInterfaceProps) => {
                 }`}
               >
                 {msg.role === "assistant" ? (
-                  <div className="prose prose-sm max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {msg.content}
-                    </ReactMarkdown>
-                  </div>
+                  <>
+                    <div className="prose prose-sm max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                    {detectDownloadableContent(msg.content) && (
+                      <div className="mt-2 pt-2 border-t border-border">
+                        <DownloadButton
+                          content={msg.content}
+                          filename={detectDownloadableContent(msg.content)!.filename}
+                          mimeType={detectDownloadableContent(msg.content)!.mimeType}
+                        />
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <p className="text-sm sm:text-base">{msg.content}</p>
                 )}
