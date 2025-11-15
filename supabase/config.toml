@@ -2,3 +2,6 @@ project_id = "felddksssxwpehozsbmt"
 
 [functions.chat]
 verify_jwt = false
+
+[functions.analyze-conversations]
+verify_jwt = false

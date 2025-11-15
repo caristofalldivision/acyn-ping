@@ -86,15 +86,15 @@ const Index = () => {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-120px)]">
-          {/* Chat Interface - Takes 2 columns on large screens */}
-          <div className="lg:col-span-2 h-full">
+      <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6">
+        <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4 sm:gap-6 h-[calc(100vh-100px)] sm:h-[calc(100vh-120px)]">
+          {/* Chat Interface - Takes 2 columns on large screens, full width on mobile */}
+          <div className="lg:col-span-2 h-[60vh] lg:h-full order-1">
             <ChatInterface userKnowledge={userKnowledge} />
           </div>
 
-          {/* Knowledge Base - Takes 1 column on large screens */}
-          <div className="h-full">
+          {/* Knowledge Base - Takes 1 column on large screens, collapsible on mobile */}
+          <div className="h-[35vh] lg:h-full order-2">
             <KnowledgeBase onKnowledgeUpdate={fetchUserKnowledge} />
           </div>
         </div>

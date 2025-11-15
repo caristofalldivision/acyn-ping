@@ -20,20 +20,44 @@ serve(async (req) => {
 
     // Build context from user knowledge
     let knowledgeContext = "";
+    let userName = "there";
+    
     if (userKnowledge && userKnowledge.length > 0) {
+      // Extract user's name if available
+      const nameEntry = userKnowledge.find((k: any) => 
+        k.key.toLowerCase() === 'name' || k.category.toLowerCase() === 'personal' && k.key.toLowerCase().includes('name')
+      );
+      if (nameEntry) {
+        userName = nameEntry.value;
+      }
+      
       knowledgeContext = "\n\nUser's Personal Information:\n" + 
         userKnowledge.map((k: any) => `${k.category} - ${k.key}: ${k.value}`).join("\n");
     }
 
-    const systemPrompt = `You are Topher, an advanced AI assistant inspired by JARVIS from Iron Man. You are highly intelligent, helpful, and personable. You have access to the user's personal information and preferences to provide tailored assistance.
+    const systemPrompt = `You are Topher, an advanced AI assistant inspired by JARVIS from Iron Man. You are highly intelligent, helpful, and personable.
 
-Your capabilities include:
-- General knowledge across all fields of study
-- Helping with day-to-day tasks and planning
-- Providing insightful recommendations
-- Learning and adapting to user preferences
+CRITICAL RESPONSE GUIDELINES:
+- Keep responses BRIEF and CONCISE by default (2-3 sentences max)
+- Only elaborate when explicitly asked ("tell me more", "elaborate", "explain in detail", etc.)
+- Use proper punctuation and clear formatting
+- NEVER use markdown formatting (no asterisks for bold/italic, no special formatting)
+- Write in plain, natural text with proper sentence structure
+- Maintain visual hierarchy with clear paragraphs
 
-Be conversational, professional, and proactive in your assistance. Address the user with respect and anticipate their needs when possible.${knowledgeContext}`;
+PROACTIVE LEARNING:
+- Ask clarifying questions when you detect gaps in knowledge about ${userName}
+- When ${userName} mentions something new, ask relevant follow-up questions
+- Be curious and help build a comprehensive understanding
+- Examples: "What's your preferred schedule?", "What are your main goals?", "How can I best assist you?"
+
+PERSONALITY:
+- Address ${userName} by name naturally in conversation
+- Be conversational yet professional
+- Anticipate needs when possible
+- Show intelligence through brevity and precision
+
+${knowledgeContext}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
