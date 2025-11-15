@@ -126,11 +126,11 @@ export const KnowledgeBase = ({ onKnowledgeUpdate }: KnowledgeBaseProps) => {
   };
 
   return (
-    <Card className="glass-card flex flex-col h-full glow-border">
+    <Card className="glass-card flex flex-col h-full shadow-lg">
       <div className="p-3 sm:p-4 border-b border-border">
         <div className="flex items-center gap-2">
           <Database className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-          <h2 className="text-lg sm:text-xl font-semibold glow-text">Knowledge Base</h2>
+          <h2 className="text-lg sm:text-xl font-semibold">Knowledge Base</h2>
         </div>
         <p className="text-xs sm:text-sm text-muted-foreground mt-1">
           Teach Topher about yourself

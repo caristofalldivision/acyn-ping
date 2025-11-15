@@ -2,10 +2,9 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Bot, User } from "lucide-react";
+import { Send, Bot, User, ArrowDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -22,6 +21,8 @@ export const ChatInterface = ({ userKnowledge }: ChatInterfaceProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -54,9 +55,30 @@ export const ChatInterface = ({ userKnowledge }: ChatInterfaceProps) => {
     loadChatHistory();
   }, []);
 
+  // Smart auto-scroll: only scroll if user is near bottom
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!scrollContainerRef.current) return;
+    
+    const container = scrollContainerRef.current;
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+    
+    if (isNearBottom) {
+      scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
+
+  // Track scroll position to show/hide scroll button
+  const handleScroll = () => {
+    if (!scrollContainerRef.current) return;
+    
+    const container = scrollContainerRef.current;
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+    setShowScrollButton(!isNearBottom);
+  };
+
+  const scrollToBottom = () => {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
@@ -115,12 +137,16 @@ export const ChatInterface = ({ userKnowledge }: ChatInterfaceProps) => {
   };
 
   return (
-    <Card className="glass-card flex flex-col h-full glow-border">
+    <Card className="glass-card flex flex-col h-full shadow-lg">
       <div className="p-4 border-b border-border">
-        <h2 className="text-xl font-semibold glow-text">Chat with Topher</h2>
+        <h2 className="text-xl font-semibold">Chat with Topher</h2>
       </div>
 
-      <ScrollArea className="flex-1 p-4">
+      <div 
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 p-4 overflow-y-auto relative"
+      >
         <div className="space-y-4">
           {messages.map((msg, idx) => (
             <div
@@ -130,37 +156,53 @@ export const ChatInterface = ({ userKnowledge }: ChatInterfaceProps) => {
               }`}
             >
               {msg.role === "assistant" && (
-                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                  <Bot className="w-5 h-5 text-primary" />
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                    <Bot className="w-5 h-5 text-primary" />
+                  </div>
                 </div>
               )}
               <div
-                className={`max-w-[85%] sm:max-w-[80%] rounded-lg p-3 ${
+                className={`max-w-[85%] sm:max-w-[80%] rounded-lg px-3 sm:px-4 py-2 sm:py-3 ${
                   msg.role === "user"
                     ? "bg-primary text-primary-foreground"
                     : "bg-card border border-border"
                 }`}
               >
                 {msg.role === "assistant" ? (
-                  <div className="text-sm prose prose-sm prose-invert max-w-none">
+                  <div className="prose prose-sm max-w-none">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {msg.content}
                     </ReactMarkdown>
                   </div>
                 ) : (
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  <p className="text-sm sm:text-base">{msg.content}</p>
                 )}
               </div>
               {msg.role === "user" && (
-                <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0">
-                  <User className="w-5 h-5 text-accent" />
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
+                    <User className="w-5 h-5 text-accent" />
+                  </div>
                 </div>
               )}
             </div>
           ))}
           <div ref={scrollRef} />
         </div>
-      </ScrollArea>
+
+        {/* Scroll to bottom button */}
+        {showScrollButton && (
+          <Button
+            onClick={scrollToBottom}
+            size="icon"
+            className="absolute bottom-4 right-4 rounded-full shadow-lg"
+            variant="secondary"
+          >
+            <ArrowDown className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
 
       <div className="p-4 border-t border-border">
         <div className="flex gap-2">

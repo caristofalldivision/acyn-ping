@@ -54,7 +54,7 @@ const Index = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">
-          <Brain className="w-16 h-16 mx-auto text-primary animate-glow" />
+          <Brain className="w-16 h-16 mx-auto text-primary animate-pulse" />
           <p className="text-muted-foreground">Initializing Topher...</p>
         </div>
       </div>
@@ -71,8 +71,8 @@ const Index = () => {
       <header className="border-b border-border bg-card/50 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <Brain className="w-8 h-8 text-primary animate-glow" />
-            <h1 className="text-2xl font-bold glow-text">TOPHER</h1>
+            <Brain className="w-8 h-8 text-primary" />
+            <h1 className="text-2xl font-bold">TOPHER</h1>
           </div>
           <Button
             variant="ghost"
