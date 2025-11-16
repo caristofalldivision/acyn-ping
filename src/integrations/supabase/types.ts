@@ -76,6 +76,127 @@ export type Database = {
         }
         Relationships: []
       }
+      knowledge_history: {
+        Row: {
+          changed_at: string
+          id: string
+          knowledge_id: string
+          new_value: string
+          old_value: string
+          reason: string | null
+        }
+        Insert: {
+          changed_at?: string
+          id?: string
+          knowledge_id: string
+          new_value: string
+          old_value: string
+          reason?: string | null
+        }
+        Update: {
+          changed_at?: string
+          id?: string
+          knowledge_id?: string
+          new_value?: string
+          old_value?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_history_knowledge_id_fkey"
+            columns: ["knowledge_id"]
+            isOneToOne: false
+            referencedRelation: "learned_knowledge"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      learned_knowledge: {
+        Row: {
+          category: Database["public"]["Enums"]["knowledge_category"]
+          confidence: Database["public"]["Enums"]["knowledge_confidence"]
+          id: string
+          importance_score: number
+          is_active: boolean
+          key: string
+          learned_at: string
+          source_conversation_id: string | null
+          updated_at: string
+          user_approved: boolean | null
+          user_id: string
+          value: string
+          version: number
+        }
+        Insert: {
+          category: Database["public"]["Enums"]["knowledge_category"]
+          confidence: Database["public"]["Enums"]["knowledge_confidence"]
+          id?: string
+          importance_score?: number
+          is_active?: boolean
+          key: string
+          learned_at?: string
+          source_conversation_id?: string | null
+          updated_at?: string
+          user_approved?: boolean | null
+          user_id: string
+          value: string
+          version?: number
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["knowledge_category"]
+          confidence?: Database["public"]["Enums"]["knowledge_confidence"]
+          id?: string
+          importance_score?: number
+          is_active?: boolean
+          key?: string
+          learned_at?: string
+          source_conversation_id?: string | null
+          updated_at?: string
+          user_approved?: boolean | null
+          user_id?: string
+          value?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learned_knowledge_source_conversation_id_fkey"
+            columns: ["source_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      learning_sessions: {
+        Row: {
+          analyzed_messages_count: number
+          id: string
+          new_knowledge_count: number
+          run_at: string
+          status: string
+          updated_knowledge_count: number
+          user_id: string
+        }
+        Insert: {
+          analyzed_messages_count?: number
+          id?: string
+          new_knowledge_count?: number
+          run_at?: string
+          status?: string
+          updated_knowledge_count?: number
+          user_id: string
+        }
+        Update: {
+          analyzed_messages_count?: number
+          id?: string
+          new_knowledge_count?: number
+          run_at?: string
+          status?: string
+          updated_knowledge_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_knowledge: {
         Row: {
           category: string
@@ -114,7 +235,14 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      knowledge_category:
+        | "facts"
+        | "preferences"
+        | "skills"
+        | "goals"
+        | "patterns"
+        | "context"
+      knowledge_confidence: "high" | "medium" | "low"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -241,6 +369,16 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      knowledge_category: [
+        "facts",
+        "preferences",
+        "skills",
+        "goals",
+        "patterns",
+        "context",
+      ],
+      knowledge_confidence: ["high", "medium", "low"],
+    },
   },
 } as const

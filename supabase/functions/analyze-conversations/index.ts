@@ -51,7 +51,7 @@ serve(async (req) => {
       ?.map((k) => `${k.category} - ${k.key}: ${k.value}`)
       .join("\n");
 
-    // Use AI to extract new knowledge
+    // Use AI to extract knowledge with tool calling
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -63,30 +63,58 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `You are an AI that extracts structured personal information from conversations.
-Analyze the conversation and identify NEW facts about the user that aren't already in their knowledge base.
+            content: `You are a knowledge extraction AI for personal assistant conversations.
 
 Existing Knowledge:
 ${existingKnowledgeText || "None"}
 
-Return your response as a JSON array of objects with this structure:
-[
-  {
-    "category": "personal" | "preferences" | "schedule" | "contacts" | "goals" | "health" | "other",
-    "key": "brief descriptive key",
-    "value": "the actual information",
-    "confidence": "high" | "medium" | "low"
-  }
-]
-
-Only include high-confidence facts. Be conservative. Return an empty array if no new information is found.`,
+Extract NEW facts that aren't in existing knowledge. Focus on actionable, important information.`,
           },
           {
             role: "user",
-            content: `Analyze this conversation:\n\n${conversationText}`,
+            content: `Analyze:\n\n${conversationText}`,
           },
         ],
-        stream: false,
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "extract_knowledge",
+              description: "Extract structured knowledge from conversation",
+              parameters: {
+                type: "object",
+                properties: {
+                  knowledge_items: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        category: {
+                          type: "string",
+                          enum: ["facts", "preferences", "skills", "goals", "patterns", "context"]
+                        },
+                        key: { type: "string" },
+                        value: { type: "string" },
+                        confidence: {
+                          type: "string",
+                          enum: ["high", "medium", "low"]
+                        },
+                        importance_score: {
+                          type: "integer",
+                          minimum: 1,
+                          maximum: 10
+                        }
+                      },
+                      required: ["category", "key", "value", "confidence", "importance_score"]
+                    }
+                  }
+                },
+                required: ["knowledge_items"]
+              }
+            }
+          }
+        ],
+        tool_choice: { type: "function", function: { name: "extract_knowledge" } }
       }),
     });
 
@@ -95,15 +123,17 @@ Only include high-confidence facts. Be conservative. Return an empty array if no
     }
 
     const data = await response.json();
-    const aiResponse = data.choices?.[0]?.message?.content || "[]";
-
-    // Parse the AI response
+    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    
     let suggestedKnowledge = [];
-    try {
-      suggestedKnowledge = JSON.parse(aiResponse);
-    } catch (e) {
-      console.error("Failed to parse AI response:", aiResponse);
-      suggestedKnowledge = [];
+    if (toolCall) {
+      try {
+        const args = JSON.parse(toolCall.function.arguments);
+        suggestedKnowledge = args.knowledge_items || [];
+      } catch (e) {
+        console.error("Failed to parse tool call:", e);
+        suggestedKnowledge = [];
+      }
     }
 
     return new Response(

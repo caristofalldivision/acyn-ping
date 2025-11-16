@@ -11,69 +11,75 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, userKnowledge, conversationId } = await req.json();
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    
+
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Build cross-conversation memory context
-    let memoryContext = "";
-    if (conversationId) {
-      try {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        
-        // Get auth header from request
-        const authHeader = req.headers.get('Authorization');
-        
-        // Fetch recent messages across all conversations for context
-        const allMessagesResponse = await fetch(
-          `${supabaseUrl}/rest/v1/chat_messages?select=content,role,conversation_id,created_at&order=created_at.desc&limit=50`,
-          {
-            headers: {
-              'apikey': supabaseKey,
-              'Authorization': authHeader || `Bearer ${supabaseKey}`,
-            }
-          }
-        );
+    const supabase = await import("https://esm.sh/@supabase/supabase-js@2").then(m => 
+      m.createClient(supabaseUrl, supabaseServiceKey)
+    );
 
-        if (allMessagesResponse.ok) {
-          const allMessages = await allMessagesResponse.json();
-          if (allMessages && allMessages.length > 0) {
-            memoryContext = "\n\nCROSS-CONVERSATION MEMORY (Recent context from all your chats):\n";
-            allMessages.slice(0, 20).forEach((msg: any) => {
-              const contextLabel = msg.conversation_id === conversationId ? "[Current]" : "[Previous]";
-              memoryContext += `${contextLabel} ${msg.role}: ${msg.content.slice(0, 100)}...\n`;
-            });
-          }
+    const { messages, userKnowledge, conversationId, userId } = await req.json();
+    
+    // Build enhanced memory context from multiple sources
+    let memoryContext = "";
+    
+    if (userId) {
+      // 1. Get AI-learned knowledge (approved or high confidence auto-approved)
+      const { data: learnedKnowledge } = await supabase
+        .from("learned_knowledge")
+        .select("category, key, value, importance_score, learned_at")
+        .eq("user_id", userId)
+        .eq("is_active", true)
+        .or("user_approved.eq.true,and(user_approved.is.null,confidence.eq.high)")
+        .gte("importance_score", 5)
+        .order("importance_score", { ascending: false })
+        .limit(30);
+
+      if (learnedKnowledge && learnedKnowledge.length > 0) {
+        memoryContext += "\n\nLearned Knowledge (from past conversations):\n" +
+          learnedKnowledge.map(k => `- ${k.category}: ${k.key} = ${k.value}`).join("\n");
+      }
+
+      // 2. Get recent cross-conversation context
+      if (conversationId) {
+        const { data: recentMessages } = await supabase
+          .from("chat_messages")
+          .select("content, role, conversation_id, created_at")
+          .eq("user_id", userId)
+          .neq("conversation_id", conversationId)
+          .order("created_at", { ascending: false })
+          .limit(15);
+
+        if (recentMessages && recentMessages.length > 0) {
+          memoryContext += "\n\nRecent context from other conversations:\n" +
+            recentMessages.map(m => `[${m.conversation_id}] ${m.role}: ${m.content}`).join("\n");
         }
-      } catch (error) {
-        console.error("Error fetching conversation memory:", error);
       }
     }
 
-    // Build knowledge context
-    let knowledgeContext = "";
+    const userKnowledgeContext = userKnowledge && userKnowledge.length > 0
+      ? "\n\nUser's Manual Knowledge Entries:\n" + userKnowledge.map((k: any) => 
+          `- ${k.category}: ${k.key} = ${k.value}`
+        ).join("\n")
+      : "";
+
+    // Try to find user's name
     let userName = "there";
-    
     if (userKnowledge && userKnowledge.length > 0) {
-      // Try to find user's name
       const nameEntry = userKnowledge.find((k: any) => 
         k.key.toLowerCase().includes('name') && k.category === 'Personal'
       );
       if (nameEntry) {
         userName = nameEntry.value;
       }
-
-      knowledgeContext += "\n\nUSER'S PERSONAL KNOWLEDGE BASE:\n";
-      userKnowledge.forEach((item: any) => {
-        knowledgeContext += `[${item.category}] ${item.key}: ${item.value}\n`;
-      });
     }
 
-    const systemPrompt = `You are Topher, an advanced AI assistant with comprehensive expertise across multiple domains. You have a sophisticated, professional personality with a focus on delivering exceptional value.
+    const systemPrompt = `You are Topher, an advanced AI personal assistant with persistent, selective, and progressive memory.
 
 CORE PERSONALITY:
 - Professional yet approachable - you're an expert colleague, not a servant
@@ -247,9 +253,9 @@ When creating documents, follow professional standards:
 - Plans: Include objectives, strategies, tactics, resources, timeline, KPIs
 
 ${memoryContext}
-${knowledgeContext}
+${userKnowledgeContext}
 
-Remember: You're not just answering questions, you're a strategic partner helping ${userName} achieve their goals across all domains of work and life. You have memory across all conversations and can reference past discussions to provide better context and continuity.`;
+Remember: You're not just answering questions, you're a strategic partner helping ${userName} achieve their goals across all domains of work and life. You have memory across all conversations and can reference past discussions to provide better context and continuity. When you reference learned information, you can mention that you remember it from previous conversations.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

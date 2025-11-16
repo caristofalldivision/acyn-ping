@@ -3,11 +3,15 @@ import { Auth } from "@/components/Auth";
 import { ChatInterface } from "@/components/ChatInterface";
 import { KnowledgeBase } from "@/components/KnowledgeBase";
 import { ConversationList } from "@/components/ConversationList";
+import { ReviewLearning } from "@/components/ReviewLearning";
+import { MemoryViewer } from "@/components/MemoryViewer";
 import { supabase } from "@/integrations/supabase/client";
 import { Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
-import { Brain, Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card } from "@/components/ui/card";
+import { Brain, Menu } from "lucide-react";
 
 const Index = () => {
   const [session, setSession] = useState<Session | null>(null);
@@ -155,9 +159,28 @@ const Index = () => {
               />
             </div>
 
-            {/* Knowledge base */}
+            {/* Memory System (Knowledge + Learned + Review) */}
             <div className="lg:col-span-2">
-              <KnowledgeBase onKnowledgeUpdate={fetchUserKnowledge} />
+              <Card className="h-full">
+                <Tabs defaultValue="manual" className="h-full flex flex-col">
+                  <div className="p-4 pb-0">
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="manual">Manual</TabsTrigger>
+                      <TabsTrigger value="learned">Learned</TabsTrigger>
+                      <TabsTrigger value="review">Review</TabsTrigger>
+                    </TabsList>
+                  </div>
+                  <TabsContent value="manual" className="flex-1 overflow-hidden">
+                    <KnowledgeBase onKnowledgeUpdate={fetchUserKnowledge} />
+                  </TabsContent>
+                  <TabsContent value="learned" className="flex-1 p-4 overflow-hidden">
+                    <MemoryViewer />
+                  </TabsContent>
+                  <TabsContent value="review" className="flex-1 p-4 overflow-hidden">
+                    <ReviewLearning />
+                  </TabsContent>
+                </Tabs>
+              </Card>
             </div>
           </div>
         </div>
