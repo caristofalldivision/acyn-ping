@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.analyze-conversations]
 verify_jwt = false
+
+[functions.background-learning]
+verify_jwt = false

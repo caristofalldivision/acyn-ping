@@ -124,28 +124,31 @@ export const ChatInterface = ({
     setLoading(true);
 
     try {
-      // Save user message
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from("chat_messages").insert({
-          user_id: user.id,
-          conversation_id: conversationId,
-          role: "user",
-          content: userInput,
-        });
+      if (!user) throw new Error("No active session");
 
-        // Generate title from first message
-        if (messages.length <= 1) {
-          await generateTitle(userInput);
-        }
+      const userId = user.id;
+
+      // Save user message
+      await supabase.from("chat_messages").insert({
+        user_id: userId,
+        conversation_id: conversationId,
+        role: "user",
+        content: userInput,
+      });
+
+      // Generate title from first message
+      if (messages.length <= 1) {
+        await generateTitle(userInput);
       }
 
-      // Get AI response
+      // Get AI response with enhanced memory
       const { data, error } = await supabase.functions.invoke("chat", {
         body: {
           messages: [...messages, userMessage],
           userKnowledge,
           conversationId,
+          userId
         },
       });
 
@@ -161,7 +164,7 @@ export const ChatInterface = ({
       // Save assistant message
       if (user) {
         await supabase.from("chat_messages").insert({
-          user_id: user.id,
+          user_id: userId,
           conversation_id: conversationId,
           role: "assistant",
           content: data.reply,
