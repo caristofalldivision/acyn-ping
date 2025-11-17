@@ -5,6 +5,7 @@ import { KnowledgeBase } from "@/components/KnowledgeBase";
 import { ConversationList } from "@/components/ConversationList";
 import { ReviewLearning } from "@/components/ReviewLearning";
 import { MemoryViewer } from "@/components/MemoryViewer";
+import { LearningControl } from "@/components/LearningControl";
 import { supabase } from "@/integrations/supabase/client";
 import { Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";

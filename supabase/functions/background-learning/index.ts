@@ -6,6 +6,212 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Helper function for fuzzy string matching (Levenshtein distance)
+function calculateSimilarity(str1: string, str2: string): number {
+  const s1 = str1.toLowerCase().trim();
+  const s2 = str2.toLowerCase().trim();
+  
+  if (s1 === s2) return 1.0;
+  if (s1.includes(s2) || s2.includes(s1)) return 0.8;
+  
+  const matrix: number[][] = [];
+  for (let i = 0; i <= s2.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= s1.length; j++) {
+    matrix[0][j] = j;
+  }
+  for (let i = 1; i <= s2.length; i++) {
+    for (let j = 1; j <= s1.length; j++) {
+      if (s2.charAt(i - 1) === s1.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  const distance = matrix[s2.length][s1.length];
+  const maxLength = Math.max(s1.length, s2.length);
+  return 1 - distance / maxLength;
+}
+
+// Find similar knowledge entries to avoid duplicates
+function findSimilarKnowledge(item: any, existingKnowledge: any[]) {
+  const matches = existingKnowledge
+    .filter(k => k.category === item.category && k.is_active)
+    .map(k => ({
+      knowledge: k,
+      similarity: calculateSimilarity(k.key, item.key)
+    }))
+    .filter(match => match.similarity > 0.7)
+    .sort((a, b) => b.similarity - a.similarity);
+  
+  return matches.length > 0 ? matches[0] : null;
+}
+
+// Validate extracted knowledge with AI
+async function validateExtractedKnowledge(
+  knowledgeItems: any[],
+  conversationContext: string,
+  existingKnowledge: any[],
+  LOVABLE_API_KEY: string
+) {
+  if (knowledgeItems.length === 0) return knowledgeItems;
+  
+  const existingKnowledgeText = existingKnowledge
+    .map(k => `${k.category} - ${k.key}: ${k.value}`)
+    .join('\n');
+  
+  try {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "system",
+            content: `You are a knowledge validation AI. Review extracted facts for accuracy, consistency, and quality.
+
+Existing Knowledge:
+${existingKnowledgeText || "None yet"}
+
+For each proposed fact:
+1. Verify it's actually stated or clearly implied in the conversation
+2. Check for contradictions with existing knowledge
+3. Rate quality: high (clear, specific, verifiable) / medium (somewhat vague) / low (unclear, ambiguous)
+4. Adjust confidence and importance if needed
+5. Flag contradictions or questionable facts`
+          },
+          {
+            role: "user",
+            content: `Conversation:\n${conversationContext.slice(0, 4000)}\n\nProposed Facts:\n${JSON.stringify(knowledgeItems, null, 2)}`
+          }
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "validate_knowledge",
+              description: "Validate and rate extracted knowledge",
+              parameters: {
+                type: "object",
+                properties: {
+                  validated_items: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        index: { type: "integer", description: "Index of original item" },
+                        is_valid: { type: "boolean", description: "Should this be stored?" },
+                        confidence: { type: "string", enum: ["high", "medium", "low"] },
+                        importance_score: { type: "integer", minimum: 1, maximum: 10 },
+                        quality_note: { type: "string", description: "Why valid/invalid" },
+                        contradicts_existing: { type: "boolean" },
+                        contradiction_note: { type: "string" }
+                      },
+                      required: ["index", "is_valid", "confidence", "importance_score"]
+                    }
+                  }
+                },
+                required: ["validated_items"]
+              }
+            }
+          }
+        ],
+        tool_choice: { type: "function", function: { name: "validate_knowledge" } }
+      }),
+    });
+    
+    if (!response.ok) return knowledgeItems;
+    
+    const data = await response.json();
+    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    
+    if (!toolCall) return knowledgeItems;
+    
+    const validation = JSON.parse(toolCall.function.arguments);
+    const validated = validation.validated_items || [];
+    
+    return knowledgeItems
+      .map((item, idx) => {
+        const result = validated.find((v: any) => v.index === idx);
+        if (!result || !result.is_valid) return null;
+        
+        return {
+          ...item,
+          confidence: result.confidence,
+          importance_score: result.importance_score,
+          validation_note: result.quality_note,
+          user_approved: result.confidence === "high" && !result.contradicts_existing ? true : null
+        };
+      })
+      .filter(Boolean);
+  } catch (error) {
+    console.error("Validation error:", error);
+    return knowledgeItems;
+  }
+}
+
+// Clean and consolidate similar knowledge entries
+async function cleanAndConsolidateKnowledge(userId: string, supabase: any) {
+  const { data: knowledge } = await supabase
+    .from("learned_knowledge")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("is_active", true);
+  
+  if (!knowledge || knowledge.length < 2) return { merged: 0 };
+  
+  const byCategory = knowledge.reduce((acc: any, item: any) => {
+    if (!acc[item.category]) acc[item.category] = [];
+    acc[item.category].push(item);
+    return acc;
+  }, {});
+  
+  let mergedCount = 0;
+  
+  for (const category of Object.keys(byCategory)) {
+    const items = byCategory[category];
+    const processed = new Set();
+    
+    for (let i = 0; i < items.length; i++) {
+      if (processed.has(items[i].id)) continue;
+      
+      for (let j = i + 1; j < items.length; j++) {
+        if (processed.has(items[j].id)) continue;
+        
+        const similarity = calculateSimilarity(items[i].key, items[j].key);
+        
+        if (similarity > 0.85) {
+          const keep = items[i].importance_score >= items[j].importance_score ? items[i] : items[j];
+          const archive = keep === items[i] ? items[j] : items[i];
+          
+          await supabase
+            .from("learned_knowledge")
+            .update({ is_active: false })
+            .eq("id", archive.id);
+          
+          processed.add(archive.id);
+          mergedCount++;
+          console.log(`Merged duplicate: "${archive.key}" into "${keep.key}"`);
+        }
+      }
+      
+      processed.add(items[i].id);
+    }
+  }
+  
+  return { merged: mergedCount };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -30,61 +236,85 @@ serve(async (req) => {
 
     if (usersError) throw usersError;
 
-    const uniqueUserIds = [...new Set(users?.map(u => u.user_id) || [])];
+    const uniqueUserIds = [...new Set(users?.map((u: any) => u.user_id) || [])];
     console.log(`Processing ${uniqueUserIds.length} users for background learning`);
+
+    const results = [];
 
     for (const userId of uniqueUserIds) {
       try {
-        // Create learning session
-        const { data: session, error: sessionError } = await supabase
-          .from("learning_sessions")
-          .insert({ user_id: userId, status: "in_progress" })
-          .select()
-          .single();
-
-        if (sessionError) throw sessionError;
-
-        // Get last learning session time
-        const { data: lastSession } = await supabase
-          .from("learning_sessions")
-          .select("run_at")
+        const sessionId = crypto.randomUUID();
+        let totalNewKnowledge = 0;
+        let totalUpdatedKnowledge = 0;
+        let totalMessagesAnalyzed = 0;
+        
+        await supabase.from("learning_sessions").insert({
+          id: sessionId,
+          user_id: userId,
+          status: "in_progress",
+          run_at: new Date().toISOString(),
+        });
+        
+        // Get conversations for this user
+        const { data: conversations } = await supabase
+          .from("conversations")
+          .select("id, updated_at")
           .eq("user_id", userId)
-          .eq("status", "completed")
-          .order("run_at", { ascending: false })
-          .limit(1)
-          .single();
-
-        // Fetch messages since last learning session
-        let query = supabase
-          .from("chat_messages")
-          .select("*")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(100);
-
-        if (lastSession) {
-          query = query.gt("created_at", lastSession.run_at);
-        }
-
-        const { data: messages, error: messagesError } = await query;
-
-        if (messagesError) throw messagesError;
-
-        if (!messages || messages.length === 0) {
-          // No new messages, mark session as completed
-          await supabase
-            .from("learning_sessions")
-            .update({ status: "completed", analyzed_messages_count: 0 })
-            .eq("id", session.id);
+          .order("updated_at", { ascending: false });
+        
+        if (!conversations || conversations.length === 0) {
+          await supabase.from("learning_sessions").update({
+            status: "completed",
+            analyzed_messages_count: 0,
+            new_knowledge_count: 0,
+            updated_knowledge_count: 0,
+          }).eq("id", sessionId);
+          results.push({ userId, success: true, messagesAnalyzed: 0 });
           continue;
         }
-
-        // Get existing knowledge for this user
+        
+        // Get existing knowledge
         const { data: existingKnowledge } = await supabase
           .from("learned_knowledge")
           .select("*")
-          .eq("user_id", userId)
-          .eq("is_active", true);
+          .eq("user_id", userId);
+        
+        // Process each conversation
+        for (const conv of conversations) {
+          // Check scan status for this conversation
+          const { data: scanStatus } = await supabase
+            .from("conversation_scan_status")
+            .select("*")
+            .eq("conversation_id", conv.id)
+            .maybeSingle();
+          
+          const { count: currentMessageCount } = await supabase
+            .from("chat_messages")
+            .select("*", { count: "exact", head: true })
+            .eq("conversation_id", conv.id);
+          
+          // Skip if no new messages since last scan
+          if (scanStatus && scanStatus.message_count_at_scan === currentMessageCount) {
+            console.log(`Conversation ${conv.id} unchanged, skipping`);
+            continue;
+          }
+          
+          // Fetch only new messages since last scan
+          let query = supabase
+            .from("chat_messages")
+            .select("*")
+            .eq("conversation_id", conv.id)
+            .order("created_at", { ascending: true });
+          
+          if (scanStatus?.last_scanned_at) {
+            query = query.gt("created_at", scanStatus.last_scanned_at);
+          }
+          
+          const { data: newMessages } = await query;
+          
+          if (!newMessages || newMessages.length === 0) continue;
+          
+          totalMessagesAnalyzed += newMessages.length;
 
         const existingKnowledgeText = existingKnowledge
           ?.map((k) => `${k.category} - ${k.key}: ${k.value}`)
