@@ -49,6 +49,44 @@ export type Database = {
           },
         ]
       }
+      conversation_scan_status: {
+        Row: {
+          conversation_id: string
+          created_at: string | null
+          id: string
+          last_scanned_at: string | null
+          last_scanned_message_id: string | null
+          message_count_at_scan: number
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string | null
+          id?: string
+          last_scanned_at?: string | null
+          last_scanned_message_id?: string | null
+          message_count_at_scan?: number
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string | null
+          id?: string
+          last_scanned_at?: string | null
+          last_scanned_message_id?: string | null
+          message_count_at_scan?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_scan_status_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: true
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           created_at: string
@@ -232,7 +270,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_background_learning_status: {
+        Args: never
+        Returns: {
+          active: boolean
+          command: string
+          jobid: number
+          schedule: string
+        }[]
+      }
+      trigger_background_learning: { Args: never; Returns: number }
     }
     Enums: {
       knowledge_category:
