@@ -42,7 +42,7 @@ serve(async (req) => {
 
       if (learnedKnowledge && learnedKnowledge.length > 0) {
         memoryContext += "\n\nLearned Knowledge (from past conversations):\n" +
-          learnedKnowledge.map(k => `- ${k.category}: ${k.key} = ${k.value}`).join("\n");
+          learnedKnowledge.map((k: any) => `- ${k.category}: ${k.key} = ${k.value}`).join("\n");
       }
 
       // 2. Get recent cross-conversation context
@@ -57,7 +57,7 @@ serve(async (req) => {
 
         if (recentMessages && recentMessages.length > 0) {
           memoryContext += "\n\nRecent context from other conversations:\n" +
-            recentMessages.map(m => `[${m.conversation_id}] ${m.role}: ${m.content}`).join("\n");
+            recentMessages.map((m: any) => `[${m.conversation_id}] ${m.role}: ${m.content}`).join("\n");
         }
       }
     }
