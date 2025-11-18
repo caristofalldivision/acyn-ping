@@ -220,36 +220,36 @@ export const ChatInterface = ({
   };
 
   return (
-    <Card className="glass-card flex flex-col h-full shadow-lg">
-      <div className="p-4 border-b border-border">
-        <h2 className="text-xl font-semibold">Chat with Topher</h2>
+    <Card className="glass-card flex flex-col h-full shadow-xl border-border/30 rounded-3xl">
+      <div className="p-6 border-b border-border/30">
+        <h2 className="text-xl font-semibold bg-gradient-to-r from-gradient-start to-gradient-end bg-clip-text text-transparent">Chat with Topher</h2>
       </div>
 
       <div 
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 p-4 overflow-y-auto relative"
+        className="flex-1 p-6 overflow-y-auto relative"
       >
-        <div className="space-y-4">
+        <div className="space-y-6">
           {messages.map((msg, idx) => (
             <div
               key={idx}
-              className={`flex gap-3 fade-in ${
+              className={`flex gap-4 fade-in ${
                 msg.role === "user" ? "justify-end" : "justify-start"
               }`}
             >
               {msg.role === "assistant" && (
                 <div className="flex-shrink-0">
-                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                    <Bot className="w-5 h-5 text-primary" />
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-gradient-start to-gradient-end flex items-center justify-center glow-effect">
+                    <Bot className="w-5 h-5 text-white" />
                   </div>
                 </div>
               )}
               <div
-                className={`max-w-[85%] sm:max-w-[80%] rounded-lg px-3 sm:px-4 py-2 sm:py-3 ${
+                className={`max-w-[75%] rounded-2xl px-5 py-4 ${
                   msg.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-card border border-border"
+                    ? "bg-gradient-to-br from-gradient-start to-gradient-end text-white shadow-lg shadow-glow-primary/20"
+                    : "bg-card/80 backdrop-blur-sm border border-border/30"
                 }`}
               >
                 {msg.role === "assistant" ? (
@@ -260,7 +260,7 @@ export const ChatInterface = ({
                       </ReactMarkdown>
                     </div>
                     {detectDownloadableContent(msg.content) && (
-                      <div className="mt-2 pt-2 border-t border-border">
+                      <div className="mt-3 pt-3 border-t border-border/20">
                         <DownloadButton
                           content={msg.content}
                           filename={detectDownloadableContent(msg.content)!.filename}
@@ -275,8 +275,8 @@ export const ChatInterface = ({
               </div>
               {msg.role === "user" && (
                 <div className="flex-shrink-0">
-                  <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
-                    <User className="w-5 h-5 text-accent" />
+                  <div className="w-10 h-10 rounded-2xl bg-card/80 backdrop-blur-sm border border-border/30 flex items-center justify-center">
+                    <User className="w-5 h-5 text-primary" />
                   </div>
                 </div>
               )}
@@ -290,30 +290,31 @@ export const ChatInterface = ({
           <Button
             onClick={scrollToBottom}
             size="icon"
-            className="absolute bottom-4 right-4 rounded-full shadow-lg"
-            variant="secondary"
+            className="absolute bottom-4 right-4 rounded-full shadow-xl shadow-glow-primary/30 animate-pulse-glow"
+            variant="gradient"
           >
-            <ArrowDown className="w-4 h-4" />
+            <ArrowDown className="w-5 h-5" />
           </Button>
         )}
       </div>
 
-      <div className="p-4 border-t border-border">
-        <div className="flex gap-2">
+      <div className="p-6 border-t border-border/30 bg-card/30 backdrop-blur-sm">
+        <div className="flex gap-3">
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+            onKeyPress={(e) => e.key === "Enter" && !loading && sendMessage()}
             placeholder="Type your message..."
             disabled={loading}
-            className="bg-input border-border"
+            className="flex-1 rounded-2xl bg-input/50 border-border/30 focus:border-primary/50 h-12 px-5 backdrop-blur-sm"
           />
-          <Button
+          <Button 
             onClick={sendMessage}
             disabled={loading || !input.trim()}
-            className="bg-primary hover:bg-primary/90"
+            variant="gradient"
+            className="rounded-2xl px-6 h-12"
           >
-            <Send className="w-4 h-4" />
+            <Send className="w-5 h-5" />
           </Button>
         </div>
       </div>

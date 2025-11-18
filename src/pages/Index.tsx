@@ -110,16 +110,16 @@ const Index = () => {
         <Auth />
       ) : (
         <div className="container mx-auto p-4 min-h-screen">
-          <header className="mb-6 flex justify-between items-center">
-            <div className="flex items-center gap-3">
+          <header className="mb-8 flex justify-between items-center">
+            <div className="flex items-center gap-4">
               {/* Mobile menu button */}
               <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                 <SheetTrigger asChild className="lg:hidden">
-                  <Button variant="ghost" size="icon">
+                  <Button variant="outline" size="icon" className="rounded-2xl">
                     <Menu className="w-5 h-5" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="p-0 w-80">
+                <SheetContent side="left" className="p-0 w-80 bg-card/95 backdrop-blur-xl border-border/30">
                   <div className="h-full">
                     <ConversationList
                       activeConversationId={activeConversationId}
@@ -133,22 +133,26 @@ const Index = () => {
                 </SheetContent>
               </Sheet>
 
-              <Brain className="w-8 h-8 text-primary animate-pulse" />
-              <h1 className="text-2xl lg:text-3xl font-bold">Topher AI</h1>
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-gradient-start to-gradient-end flex items-center justify-center glow-effect">
+                <Brain className="w-6 h-6 text-white" />
+              </div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-gradient-start to-gradient-end bg-clip-text text-transparent">Topher</h1>
             </div>
-            <Button onClick={handleSignOut} variant="outline">
+            <Button onClick={handleSignOut} variant="outline" className="rounded-2xl">
               Sign Out
             </Button>
           </header>
 
-          <div className="grid grid-cols-1 lg:grid-cols-6 gap-4 h-[calc(100vh-120px)]">
+          <div className="grid grid-cols-1 lg:grid-cols-6 gap-6 h-[calc(100vh-140px)]">
             {/* Desktop conversation list */}
             <div className="hidden lg:block lg:col-span-1">
-              <ConversationList
-                activeConversationId={activeConversationId}
-                onConversationSelect={setActiveConversationId}
-                onNewConversation={handleNewConversation}
-              />
+              <div className="glass-card rounded-3xl border border-border/30 p-4 h-full">
+                <ConversationList
+                  activeConversationId={activeConversationId}
+                  onConversationSelect={setActiveConversationId}
+                  onNewConversation={handleNewConversation}
+                />
+              </div>
             </div>
 
             {/* Chat interface */}
@@ -162,13 +166,13 @@ const Index = () => {
 
             {/* Memory System (Knowledge + Learned + Review) */}
             <div className="lg:col-span-2">
-              <Card className="h-full">
+              <Card className="h-full glass-card rounded-3xl border-border/30">
                 <Tabs defaultValue="manual" className="h-full flex flex-col">
                   <div className="p-4 pb-0">
-                    <TabsList className="grid w-full grid-cols-3">
-                      <TabsTrigger value="manual">Manual</TabsTrigger>
-                      <TabsTrigger value="learned">Learned</TabsTrigger>
-                      <TabsTrigger value="review">Review</TabsTrigger>
+                    <TabsList className="grid w-full grid-cols-3 bg-muted/50 p-1 rounded-2xl">
+                      <TabsTrigger value="manual" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-gradient-start data-[state=active]:to-gradient-end data-[state=active]:text-white">Manual</TabsTrigger>
+                      <TabsTrigger value="learned" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-gradient-start data-[state=active]:to-gradient-end data-[state=active]:text-white">Learned</TabsTrigger>
+                      <TabsTrigger value="review" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-gradient-start data-[state=active]:to-gradient-end data-[state=active]:text-white">Review</TabsTrigger>
                     </TabsList>
                   </div>
                   <TabsContent value="manual" className="flex-1 overflow-hidden">

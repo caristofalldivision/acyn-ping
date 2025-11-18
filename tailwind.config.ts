@@ -51,6 +51,11 @@ export default {
           primary: "hsl(var(--glow-primary))",
           secondary: "hsl(var(--glow-secondary))",
         },
+        gradient: {
+          start: "hsl(var(--gradient-start))",
+          mid: "hsl(var(--gradient-mid))",
+          end: "hsl(var(--gradient-end))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
