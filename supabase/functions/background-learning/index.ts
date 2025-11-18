@@ -316,29 +316,29 @@ serve(async (req) => {
           
           totalMessagesAnalyzed += newMessages.length;
 
-        const existingKnowledgeText = existingKnowledge
-          ?.map((k) => `${k.category} - ${k.key}: ${k.value}`)
-          .join("\n");
+          const existingKnowledgeText = existingKnowledge
+            ?.map((k) => `${k.category} - ${k.key}: ${k.value}`)
+            .join("\n");
 
-        // Prepare conversation for analysis
-        const conversationText = messages
-          ?.map((m) => `${m.role}: ${m.content}`)
-          .reverse()
-          .join("\n");
+          // Prepare conversation for analysis
+          const conversationText = newMessages
+            ?.map((m) => `${m.role}: ${m.content}`)
+            .reverse()
+            .join("\n");
 
-        // Use AI to extract knowledge with tool calling
-        const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: [
-              {
-                role: "system",
-                content: `You are a knowledge extraction AI. Extract structured information from conversations.
+          // Use AI to extract knowledge with tool calling
+          const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash",
+              messages: [
+                {
+                  role: "system",
+                  content: `You are a knowledge extraction AI. Extract structured information from conversations.
 
 Existing Knowledge:
 ${existingKnowledgeText || "None"}
@@ -352,137 +352,158 @@ Extract NEW or UPDATED facts. For each fact, provide:
 - is_update: true if updating existing knowledge
 
 Only extract high-confidence, important information. Be conservative.`,
-              },
-              {
-                role: "user",
-                content: `Analyze:\n\n${conversationText}`,
-              },
-            ],
-            tools: [
-              {
-                type: "function",
-                function: {
-                  name: "extract_knowledge",
-                  description: "Extract knowledge from conversations",
-                  parameters: {
-                    type: "object",
-                    properties: {
-                      knowledge_items: {
-                        type: "array",
-                        items: {
-                          type: "object",
-                          properties: {
-                            category: {
-                              type: "string",
-                              enum: ["facts", "preferences", "skills", "goals", "patterns", "context"]
+                },
+                {
+                  role: "user",
+                  content: `Analyze:\n\n${conversationText}`,
+                },
+              ],
+              tools: [
+                {
+                  type: "function",
+                  function: {
+                    name: "extract_knowledge",
+                    description: "Extract knowledge from conversations",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        knowledge_items: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              category: {
+                                type: "string",
+                                enum: ["facts", "preferences", "skills", "goals", "patterns", "context"]
+                              },
+                              key: { type: "string" },
+                              value: { type: "string" },
+                              confidence: {
+                                type: "string",
+                                enum: ["high", "medium", "low"]
+                              },
+                              importance_score: {
+                                type: "integer",
+                                minimum: 1,
+                                maximum: 10
+                              },
+                              is_update: { type: "boolean" },
+                              reason: { type: "string" }
                             },
-                            key: { type: "string" },
-                            value: { type: "string" },
-                            confidence: {
-                              type: "string",
-                              enum: ["high", "medium", "low"]
-                            },
-                            importance_score: {
-                              type: "integer",
-                              minimum: 1,
-                              maximum: 10
-                            },
-                            is_update: { type: "boolean" },
-                            reason: { type: "string" }
-                          },
-                          required: ["category", "key", "value", "confidence", "importance_score"]
+                            required: ["category", "key", "value", "confidence", "importance_score"]
+                          }
                         }
-                      }
-                    },
-                    required: ["knowledge_items"]
+                      },
+                      required: ["knowledge_items"]
+                    }
                   }
                 }
-              }
-            ],
-            tool_choice: { type: "function", function: { name: "extract_knowledge" } }
-          }),
-        });
+              ],
+              tool_choice: { type: "function", function: { name: "extract_knowledge" } }
+            }),
+          });
 
-        if (!response.ok) {
-          throw new Error("AI gateway error");
-        }
-
-        const data = await response.json();
-        const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-        
-        let knowledgeItems = [];
-        if (toolCall) {
-          const args = JSON.parse(toolCall.function.arguments);
-          knowledgeItems = args.knowledge_items || [];
-        }
-
-        let newCount = 0;
-        let updateCount = 0;
-
-        // Process each knowledge item
-        for (const item of knowledgeItems) {
-          // Check for existing similar knowledge
-          const similar = existingKnowledge?.find(
-            k => k.key.toLowerCase() === item.key.toLowerCase() && k.category === item.category
-          );
-
-          if (similar && item.is_update) {
-            // Update existing knowledge
-            const { error: historyError } = await supabase
-              .from("knowledge_history")
-              .insert({
-                knowledge_id: similar.id,
-                old_value: similar.value,
-                new_value: item.value,
-                reason: item.reason || "Progressive update from new conversation"
-              });
-
-            if (historyError) console.error("History insert error:", historyError);
-
-            const { error: updateError } = await supabase
-              .from("learned_knowledge")
-              .update({
-                value: item.value,
-                confidence: item.confidence,
-                importance_score: item.importance_score,
-                version: similar.version + 1,
-                updated_at: new Date().toISOString(),
-                user_approved: item.confidence === "high" ? true : null
-              })
-              .eq("id", similar.id);
-
-            if (!updateError) updateCount++;
-          } else if (!similar) {
-            // Insert new knowledge
-            const { error: insertError } = await supabase
-              .from("learned_knowledge")
-              .insert({
-                user_id: userId,
-                category: item.category,
-                key: item.key,
-                value: item.value,
-                confidence: item.confidence,
-                importance_score: item.importance_score,
-                source_conversation_id: messages[0]?.conversation_id,
-                user_approved: item.confidence === "high" ? true : null
-              });
-
-            if (!insertError) newCount++;
+          if (!response.ok) {
+            throw new Error("AI gateway error");
           }
-        }
 
-        // Update learning session
+          const data = await response.json();
+          const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+          
+          let knowledgeItems = [];
+          if (toolCall) {
+            const args = JSON.parse(toolCall.function.arguments);
+            knowledgeItems = args.knowledge_items || [];
+          }
+
+          // Process each knowledge item
+          for (const item of knowledgeItems) {
+            // Check for existing similar knowledge
+            const similar = existingKnowledge?.find(
+              k => k.key.toLowerCase() === item.key.toLowerCase() && k.category === item.category
+            );
+
+            if (similar && item.is_update) {
+              // Update existing knowledge
+              const { error: historyError } = await supabase
+                .from("knowledge_history")
+                .insert({
+                  knowledge_id: similar.id,
+                  old_value: similar.value,
+                  new_value: item.value,
+                  reason: item.reason || "Progressive update from new conversation"
+                });
+
+              if (historyError) console.error("History insert error:", historyError);
+
+              const { error: updateError } = await supabase
+                .from("learned_knowledge")
+                .update({
+                  value: item.value,
+                  confidence: item.confidence,
+                  importance_score: item.importance_score,
+                  version: similar.version + 1,
+                  updated_at: new Date().toISOString(),
+                  user_approved: item.confidence === "high" ? true : null
+                })
+                .eq("id", similar.id);
+
+              if (!updateError) {
+                totalUpdatedKnowledge++;
+              }
+            } else if (!similar) {
+              // Insert new knowledge
+              const { error: insertError } = await supabase
+                .from("learned_knowledge")
+                .insert({
+                  user_id: userId,
+                  category: item.category,
+                  key: item.key,
+                  value: item.value,
+                  confidence: item.confidence,
+                  importance_score: item.importance_score,
+                  source_conversation_id: conv.id,
+                  user_approved: item.confidence === "high" ? true : null
+                });
+
+              if (!insertError) {
+                totalNewKnowledge++;
+              }
+            }
+          }
+          
+          // Update scan status for this conversation
+          await supabase
+            .from("conversation_scan_status")
+            .upsert({
+              conversation_id: conv.id,
+              user_id: userId,
+              last_scanned_message_id: newMessages[newMessages.length - 1].id,
+              last_scanned_at: new Date().toISOString(),
+              message_count_at_scan: currentMessageCount
+            });
+        }
+        
+        // Update learning session with final totals
         await supabase
           .from("learning_sessions")
           .update({
             status: "completed",
-            analyzed_messages_count: messages.length,
-            new_knowledge_count: newCount,
-            updated_knowledge_count: updateCount
+            analyzed_messages_count: totalMessagesAnalyzed,
+            new_knowledge_count: totalNewKnowledge,
+            updated_knowledge_count: totalUpdatedKnowledge
           })
-          .eq("id", session.id);
+          .eq("id", sessionId);
 
-        console.log(`User ${userId}: ${newCount} new, ${updateCount} updated from ${messages.length} messages`);
+        console.log(`User ${userId}: ${totalNewKnowledge} new, ${totalUpdatedKnowledge} updated from ${totalMessagesAnalyzed} messages`);
+        
+        results.push({ 
+          userId, 
+          success: true, 
+          messagesAnalyzed: totalMessagesAnalyzed,
+          newKnowledge: totalNewKnowledge,
+          updatedKnowledge: totalUpdatedKnowledge
+        });
 
       } catch (userError) {
         console.error(`Error processing user ${userId}:`, userError);
