@@ -149,11 +149,12 @@ export const ConversationList = ({
 
   return (
     <>
-      <Card className="h-full flex flex-col shadow-lg">
-        <div className="p-4 border-b border-border">
+      <Card className="h-full flex flex-col bg-transparent border-none shadow-none">
+        <div className="p-4 border-b border-border/30">
           <Button
             onClick={onNewConversation}
-            className="w-full"
+            className="w-full rounded-2xl"
+            variant="gradient"
             size="sm"
           >
             <MessageSquarePlus className="w-4 h-4 mr-2" />
@@ -161,14 +162,14 @@ export const ConversationList = ({
           </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div className="flex-1 overflow-y-auto p-2 space-y-2">
           {conversations.map((conv) => (
             <div
               key={conv.id}
-              className={`group relative rounded-lg p-3 cursor-pointer transition-colors ${
+              className={`group relative rounded-2xl p-4 cursor-pointer transition-all ${
                 activeConversationId === conv.id
-                  ? "bg-accent"
-                  : "hover:bg-accent/50"
+                  ? "bg-gradient-to-r from-gradient-start to-gradient-end text-white shadow-lg shadow-glow-primary/20"
+                  : "bg-card/50 hover:bg-card/80 backdrop-blur-sm border border-border/30"
               }`}
               onClick={() => onConversationSelect(conv.id)}
             >
@@ -178,32 +179,36 @@ export const ConversationList = ({
                     value={editTitle}
                     onChange={(e) => setEditTitle(e.target.value)}
                     onKeyPress={(e) => e.key === "Enter" && saveEdit(conv.id)}
-                    className="h-7 text-sm"
+                    className="h-8 text-sm rounded-xl bg-input/50 border-border/30"
                     autoFocus
                   />
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-7 w-7"
+                    className="h-8 w-8 rounded-xl"
                     onClick={() => saveEdit(conv.id)}
                   >
-                    <Check className="w-3 h-3" />
+                    <Check className="w-4 h-4" />
                   </Button>
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-7 w-7"
+                    className="h-8 w-8 rounded-xl"
                     onClick={cancelEdit}
                   >
-                    <X className="w-3 h-3" />
+                    <X className="w-4 h-4" />
                   </Button>
                 </div>
               ) : (
                 <>
-                  <div className="text-sm font-medium truncate pr-16">
+                  <div className={`text-sm font-medium truncate pr-20 ${
+                    activeConversationId === conv.id ? "text-white" : "text-foreground"
+                  }`}>
                     {conv.title}
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1">
+                  <div className={`text-xs mt-1 ${
+                    activeConversationId === conv.id ? "text-white/70" : "text-muted-foreground"
+                  }`}>
                     {new Date(conv.updated_at).toLocaleDateString()}
                   </div>
                   <div
@@ -213,7 +218,7 @@ export const ConversationList = ({
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-7 w-7"
+                      className={`h-8 w-8 rounded-xl ${activeConversationId === conv.id ? "hover:bg-white/20 text-white" : ""}`}
                       onClick={() => startEdit(conv)}
                     >
                       <Edit2 className="w-3 h-3" />
@@ -221,7 +226,7 @@ export const ConversationList = ({
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-7 w-7"
+                      className={`h-8 w-8 rounded-xl ${activeConversationId === conv.id ? "hover:bg-white/20 text-white" : ""}`}
                       onClick={() => archiveConversation(conv.id)}
                     >
                       <Archive className="w-3 h-3" />
@@ -229,7 +234,7 @@ export const ConversationList = ({
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-7 w-7 text-destructive"
+                      className={`h-8 w-8 rounded-xl text-destructive ${activeConversationId === conv.id ? "hover:bg-white/20" : ""}`}
                       onClick={() => confirmDelete(conv.id)}
                     >
                       <Trash2 className="w-3 h-3" />
