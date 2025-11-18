@@ -41,6 +41,7 @@ export const MemoryViewer = () => {
   const [editValue, setEditValue] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [selectedKnowledgeId, setSelectedKnowledgeId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"all" | "style">("all");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -150,7 +151,38 @@ export const MemoryViewer = () => {
   return (
     <ScrollArea className="h-[600px]">
       <div className="space-y-4 pr-4">
-        {knowledge.map((item) => (
+        <div className="flex gap-2 mb-4">
+          <Button
+            variant={viewMode === "all" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("all")}
+          >
+            All Knowledge
+          </Button>
+          <Button
+            variant={viewMode === "style" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("style")}
+          >
+            Communication Style
+          </Button>
+        </div>
+
+        {knowledge
+          .filter((item) => {
+            if (viewMode === "style") {
+              return (
+                item.category === "preferences" &&
+                (item.key.includes("response") ||
+                  item.key.includes("punctuation") ||
+                  item.key.includes("detail") ||
+                  item.key.includes("tone") ||
+                  item.key.includes("format"))
+              );
+            }
+            return true;
+          })
+          .map((item) => (
           <Card key={item.id} className="p-4">
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-3">

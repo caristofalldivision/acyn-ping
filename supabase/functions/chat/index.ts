@@ -19,11 +19,46 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const supabase = await import("https://esm.sh/@supabase/supabase-js@2").then(m => 
-      m.createClient(supabaseUrl, supabaseServiceKey)
-    );
+    const { createClient } = await import("npm:@supabase/supabase-js@2");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { messages, userKnowledge, conversationId, userId } = await req.json();
+    
+    // Real-time style learning - detect feedback patterns
+    if (userId && messages && messages.length > 0) {
+      const lastUserMessage = messages[messages.length - 1];
+      if (lastUserMessage.role === "user") {
+        const content = lastUserMessage.content.toLowerCase();
+        
+        // Detect style feedback patterns
+        const feedbackPatterns = [
+          { pattern: /too long|make it shorter|be more brief|keep it short/i, 
+            data: { key: "response_length", value: "brief_by_default", importance: 9 }},
+          { pattern: /don't use em dash|no em dash|avoid --|avoid em dash/i,
+            data: { key: "punctuation", value: "no_em_dashes", importance: 9 }},
+          { pattern: /explain more|more detail|elaborate|tell me more/i,
+            data: { key: "detail_level", value: "detailed_when_asked", importance: 7 }},
+          { pattern: /too formal|be casual|less formal/i,
+            data: { key: "tone", value: "casual_friendly", importance: 7 }},
+        ];
+        
+        for (const {pattern, data} of feedbackPatterns) {
+          if (pattern.test(content)) {
+            await supabase.from("learned_knowledge").upsert({
+              user_id: userId,
+              category: "preferences",
+              key: data.key,
+              value: data.value,
+              confidence: "high",
+              importance_score: data.importance,
+              is_active: true,
+              user_approved: true,
+              source_conversation_id: conversationId,
+            }, { onConflict: "user_id,category,key" });
+          }
+        }
+      }
+    }
     
     // Build enhanced memory context from multiple sources
     let memoryContext = "";
@@ -76,6 +111,37 @@ serve(async (req) => {
       );
       if (nameEntry) {
         userName = nameEntry.value;
+      }
+    }
+
+    // Fetch learned communication style preferences
+    let styleInstructions = "";
+    if (userId) {
+      const { data: stylePrefs } = await supabase
+        .from("learned_knowledge")
+        .select("key, value")
+        .eq("user_id", userId)
+        .eq("category", "preferences")
+        .eq("is_active", true)
+        .or("user_approved.eq.true,and(user_approved.is.null,confidence.eq.high)")
+        .ilike("key", "%response%,punctuation,detail%,tone%,format%");
+
+      if (stylePrefs && stylePrefs.length > 0) {
+        styleInstructions = "\n\nCUSTOM COMMUNICATION STYLE (MUST FOLLOW):\n";
+        stylePrefs.forEach((pref: any) => {
+          // Parse specific rules
+          if (pref.key.includes("response_length") && pref.value.includes("brief")) {
+            styleInstructions += "- Keep responses SHORT and CONCISE by default. Only elaborate when explicitly asked.\n";
+          }
+          if (pref.key.includes("punctuation") && pref.value.includes("no_em_dash")) {
+            styleInstructions += "- NEVER use em dashes (—). Use commas, periods, or hyphens instead.\n";
+          }
+          if (pref.key.includes("detail") && pref.value.includes("summarize")) {
+            styleInstructions += "- Provide summaries first. Only explain in detail when user asks.\n";
+          }
+          // Generic catch-all
+          styleInstructions += `- ${pref.key}: ${pref.value}\n`;
+        });
       }
     }
 
@@ -244,6 +310,7 @@ RESPONSE GUIDELINES:
 - Provide actionable next steps when relevant
 - Ask clarifying questions when requirements are ambiguous
 - Suggest alternatives and trade-offs when appropriate
+${styleInstructions}
 
 DOCUMENT TEMPLATES:
 When creating documents, follow professional standards:

@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -350,6 +350,13 @@ Extract NEW or UPDATED facts. For each fact, provide:
 - confidence: high, medium, or low
 - importance_score: 1-10 (how important is this)
 - is_update: true if updating existing knowledge
+
+COMMUNICATION STYLE LEARNING:
+Also detect user preferences for how they want responses formatted:
+- If user says "keep it short", "be brief" → preferences: response_length = brief_by_default
+- If user says "don't use em dash", "avoid —" → preferences: punctuation = no_em_dashes
+- If user says "explain only when asked" → preferences: detail_level = summarize_unless_asked
+- If user corrects style (e.g., "too long", "too formal") → extract as preference
 
 Only extract high-confidence, important information. Be conservative.`,
                 },
