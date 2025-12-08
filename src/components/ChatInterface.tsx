@@ -227,7 +227,7 @@ export const ChatInterface = ({
       <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-6">
         {showEmptyState ? <div className="h-full flex flex-col items-center justify-center">
             <VoiceOrb isListening={isListening} onMicClick={handleMicClick} size="lg" />
-            <p className="mt-16 text-center text-muted-foreground max-w-md px-4">Hello! I'm Topha, your AI assistant. Ask me anything or tap the orb to speak.</p>
+            <p className="mt-16 text-center text-muted-foreground max-w-md px-4">Hello! I'm Topha, your  assistant. Ask me anything or tap the orb to speak.</p>
           </div> : <div className="max-w-3xl mx-auto space-y-6">
             {messages.map((msg, idx) => <div key={idx} className={`flex gap-3 fade-in ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                 {msg.role === "assistant" && <div className="flex-shrink-0">
