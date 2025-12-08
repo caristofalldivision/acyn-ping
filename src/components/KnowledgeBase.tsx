@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -126,20 +125,18 @@ export const KnowledgeBase = ({ onKnowledgeUpdate }: KnowledgeBaseProps) => {
   };
 
   return (
-    <Card className="glass-card flex flex-col h-full shadow-lg">
-      <div className="p-3 sm:p-4 border-b border-border">
-        <div className="flex items-center gap-2">
-          <Database className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-          <h2 className="text-lg sm:text-xl font-semibold">Knowledge Base</h2>
-        </div>
-        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-          Teach Topher about yourself
-        </p>
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-2 mb-4">
+        <Database className="w-5 h-5 text-primary" />
+        <h2 className="text-lg font-semibold">Knowledge Base</h2>
       </div>
+      <p className="text-sm text-muted-foreground mb-4">
+        Teach Topher about yourself
+      </p>
 
-      <div className="p-3 sm:p-4 space-y-2 sm:space-y-3 border-b border-border">
+      <div className="space-y-3 mb-4">
         <Select value={category} onValueChange={setCategory}>
-          <SelectTrigger className="bg-input border-border">
+          <SelectTrigger className="bg-input border-border/50 rounded-xl">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -154,54 +151,54 @@ export const KnowledgeBase = ({ onKnowledgeUpdate }: KnowledgeBaseProps) => {
           placeholder="Key (e.g., 'name' or 'favorite color')"
           value={key}
           onChange={(e) => setKey(e.target.value)}
-          className="bg-input border-border text-sm"
+          className="bg-input border-border/50 rounded-xl"
         />
         <Input
           placeholder="Value"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="bg-input border-border text-sm"
+          className="bg-input border-border/50 rounded-xl"
         />
         <Button
           onClick={addKnowledge}
           disabled={loading}
-          className="w-full bg-primary hover:bg-primary/90 text-sm"
+          className="w-full rounded-xl"
         >
-          <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />
+          <Plus className="w-4 h-4 mr-2" />
           Add Knowledge
         </Button>
       </div>
 
-      <ScrollArea className="flex-1 p-3 sm:p-4">
-        <div className="space-y-2">
+      <ScrollArea className="flex-1">
+        <div className="space-y-2 pr-4">
           {knowledge.map((item) => (
             <div
               key={item.id}
-              className="bg-card border border-border rounded-lg p-2 sm:p-3 fade-in"
+              className="bg-secondary/50 border border-border/50 rounded-xl p-3"
             >
               <div className="flex justify-between items-start gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="text-xs text-primary font-medium mb-1">
                     {item.category}
                   </div>
-                  <div className="text-xs sm:text-sm font-medium">{item.key}</div>
-                  <div className="text-xs sm:text-sm text-muted-foreground break-words">
+                  <div className="text-sm font-medium">{item.key}</div>
+                  <div className="text-sm text-muted-foreground break-words">
                     {item.value}
                   </div>
                 </div>
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="icon"
                   onClick={() => deleteKnowledge(item.id)}
-                  className="text-destructive hover:text-destructive/90 hover:bg-destructive/10 h-8 w-8 p-0"
+                  className="text-destructive hover:text-destructive/90 hover:bg-destructive/10 h-8 w-8 rounded-lg"
                 >
-                  <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <Trash2 className="w-4 h-4" />
                 </Button>
               </div>
             </div>
           ))}
         </div>
       </ScrollArea>
-    </Card>
+    </div>
   );
 };

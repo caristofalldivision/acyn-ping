@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Loader2 } from "lucide-react";
+import { Check, X, Loader2, CheckCircle } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface LearnedItem {
@@ -103,60 +103,66 @@ export const ReviewLearning = () => {
     );
   }
 
-  if (pendingItems.length === 0) {
-    return (
-      <Card className="p-6">
-        <p className="text-center text-muted-foreground">
-          No pending knowledge to review. Topher will automatically learn from your conversations.
-        </p>
-      </Card>
-    );
-  }
-
   return (
-    <ScrollArea className="h-[600px]">
-      <div className="space-y-4 pr-4">
-        {pendingItems.map((item) => (
-          <Card key={item.id} className="p-4">
-            <div className="space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="outline">{item.category}</Badge>
-                    <Badge variant="secondary">
-                      Confidence: {item.confidence}
-                    </Badge>
-                    <Badge variant="default">
-                      Importance: {item.importance_score}/10
-                    </Badge>
-                  </div>
-                  <h4 className="font-semibold text-sm">{item.key}</h4>
-                  <p className="text-sm text-muted-foreground">{item.value}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Learned {new Date(item.learned_at).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="default"
-                    onClick={() => handleApprove(item.id)}
-                  >
-                    <Check className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => handleReject(item.id)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </Card>
-        ))}
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-2 mb-4">
+        <CheckCircle className="w-5 h-5 text-primary" />
+        <h2 className="text-lg font-semibold">Review Pending</h2>
       </div>
-    </ScrollArea>
+
+      {pendingItems.length === 0 ? (
+        <Card className="p-6 bg-secondary/50 border-border/50">
+          <p className="text-center text-muted-foreground">
+            No pending knowledge to review. Topher will automatically learn from your conversations.
+          </p>
+        </Card>
+      ) : (
+        <ScrollArea className="flex-1">
+          <div className="space-y-3 pr-4">
+            {pendingItems.map((item) => (
+              <Card key={item.id} className="p-3 bg-secondary/50 border-border/50">
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <Badge variant="outline" className="text-xs">{item.category}</Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          {item.confidence}
+                        </Badge>
+                        <Badge variant="default" className="text-xs">
+                          {item.importance_score}/10
+                        </Badge>
+                      </div>
+                      <h4 className="font-medium text-sm">{item.key}</h4>
+                      <p className="text-sm text-muted-foreground">{item.value}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Learned {new Date(item.learned_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        size="icon"
+                        onClick={() => handleApprove(item.id)}
+                        className="h-8 w-8 rounded-lg"
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="destructive"
+                        onClick={() => handleReject(item.id)}
+                        className="h-8 w-8 rounded-lg"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </ScrollArea>
+      )}
+    </div>
   );
 };

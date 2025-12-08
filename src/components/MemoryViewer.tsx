@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, Edit2, Save, X, History } from "lucide-react";
+import { Trash2, Edit2, Save, X, History, Brain } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
@@ -40,7 +40,6 @@ export const MemoryViewer = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [selectedKnowledgeId, setSelectedKnowledgeId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"all" | "style">("all");
   const { toast } = useToast();
 
@@ -78,7 +77,6 @@ export const MemoryViewer = () => {
 
       if (error) throw error;
       setHistory(data || []);
-      setSelectedKnowledgeId(knowledgeId);
     } catch (error) {
       console.error("Error fetching history:", error);
     }
@@ -91,7 +89,6 @@ export const MemoryViewer = () => {
 
   const handleSave = async (id: string, oldValue: string) => {
     try {
-      // Save to history
       await supabase.from("knowledge_history").insert({
         knowledge_id: id,
         old_value: oldValue,
@@ -99,7 +96,6 @@ export const MemoryViewer = () => {
         reason: "User manual edit",
       });
 
-      // Update knowledge
       const { error } = await supabase
         .from("learned_knowledge")
         .update({ 
@@ -149,143 +145,153 @@ export const MemoryViewer = () => {
   };
 
   return (
-    <ScrollArea className="h-[600px]">
-      <div className="space-y-4 pr-4">
-        <div className="flex gap-2 mb-4">
-          <Button
-            variant={viewMode === "all" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("all")}
-          >
-            All Knowledge
-          </Button>
-          <Button
-            variant={viewMode === "style" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("style")}
-          >
-            Communication Style
-          </Button>
-        </div>
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-2 mb-4">
+        <Brain className="w-5 h-5 text-primary" />
+        <h2 className="text-lg font-semibold">Learned Memory</h2>
+      </div>
 
-        {knowledge
-          .filter((item) => {
-            if (viewMode === "style") {
-              return (
-                item.category === "preferences" &&
-                (item.key.includes("response") ||
-                  item.key.includes("punctuation") ||
-                  item.key.includes("detail") ||
-                  item.key.includes("tone") ||
-                  item.key.includes("format"))
-              );
-            }
-            return true;
-          })
-          .map((item) => (
-          <Card key={item.id} className="p-4">
-            <div className="space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-2 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="outline">{item.category}</Badge>
-                    <Badge variant="secondary">v{item.version}</Badge>
-                    <Badge variant="default">
-                      Importance: {item.importance_score}/10
-                    </Badge>
-                  </div>
-                  <h4 className="font-semibold text-sm">{item.key}</h4>
-                  {editingId === item.id ? (
-                    <div className="flex gap-2">
-                      <Input
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        className="flex-1"
-                      />
-                      <Button
-                        size="sm"
-                        onClick={() => handleSave(item.id, item.value)}
-                      >
-                        <Save className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setEditingId(null)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+      <div className="flex gap-2 mb-4">
+        <Button
+          variant={viewMode === "all" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setViewMode("all")}
+          className="rounded-lg"
+        >
+          All Knowledge
+        </Button>
+        <Button
+          variant={viewMode === "style" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setViewMode("style")}
+          className="rounded-lg"
+        >
+          Communication Style
+        </Button>
+      </div>
+
+      <ScrollArea className="flex-1">
+        <div className="space-y-3 pr-4">
+          {knowledge
+            .filter((item) => {
+              if (viewMode === "style") {
+                return (
+                  item.category === "preferences" &&
+                  (item.key.includes("response") ||
+                    item.key.includes("punctuation") ||
+                    item.key.includes("detail") ||
+                    item.key.includes("tone") ||
+                    item.key.includes("format"))
+                );
+              }
+              return true;
+            })
+            .map((item) => (
+            <Card key={item.id} className="p-3 bg-secondary/50 border-border/50">
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <Badge variant="outline" className="text-xs">{item.category}</Badge>
+                      <Badge variant="secondary" className="text-xs">v{item.version}</Badge>
+                      <Badge variant="default" className="text-xs">
+                        {item.importance_score}/10
+                      </Badge>
                     </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">{item.value}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    Updated {new Date(item.updated_at).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => fetchHistory(item.id)}
-                      >
-                        <History className="h-4 w-4" />
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
-                      <DialogHeader>
-                        <DialogTitle>Knowledge History: {item.key}</DialogTitle>
-                      </DialogHeader>
-                      <ScrollArea className="h-[400px]">
-                        <div className="space-y-3 pr-4">
-                          {history.map((h) => (
-                            <Card key={h.id} className="p-3">
-                              <div className="space-y-1">
-                                <p className="text-xs text-muted-foreground">
+                    <h4 className="font-medium text-sm">{item.key}</h4>
+                    {editingId === item.id ? (
+                      <div className="flex gap-2">
+                        <Input
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          className="flex-1 h-8 text-sm rounded-lg"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => handleSave(item.id, item.value)}
+                          className="h-8 rounded-lg"
+                        >
+                          <Save className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditingId(null)}
+                          className="h-8 rounded-lg"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{item.value}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Updated {new Date(item.updated_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="flex gap-1">
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => fetchHistory(item.id)}
+                          className="h-7 w-7 rounded-lg"
+                        >
+                          <History className="h-3 w-3" />
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-lg bg-card border-border">
+                        <DialogHeader>
+                          <DialogTitle>History: {item.key}</DialogTitle>
+                        </DialogHeader>
+                        <ScrollArea className="h-[300px]">
+                          <div className="space-y-2 pr-4">
+                            {history.map((h) => (
+                              <Card key={h.id} className="p-3 bg-secondary/50">
+                                <p className="text-xs text-muted-foreground mb-1">
                                   {new Date(h.changed_at).toLocaleString()}
                                 </p>
-                                <div className="space-y-1">
-                                  <p className="text-sm">
-                                    <span className="font-semibold">Old:</span> {h.old_value}
+                                <p className="text-sm">
+                                  <span className="font-medium">Old:</span> {h.old_value}
+                                </p>
+                                <p className="text-sm">
+                                  <span className="font-medium">New:</span> {h.new_value}
+                                </p>
+                                {h.reason && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Reason: {h.reason}
                                   </p>
-                                  <p className="text-sm">
-                                    <span className="font-semibold">New:</span> {h.new_value}
-                                  </p>
-                                  {h.reason && (
-                                    <p className="text-xs text-muted-foreground">
-                                      Reason: {h.reason}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            </Card>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </DialogContent>
-                  </Dialog>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleEdit(item)}
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => handleDelete(item.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                                )}
+                              </Card>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </DialogContent>
+                    </Dialog>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleEdit(item)}
+                      className="h-7 w-7 rounded-lg"
+                    >
+                      <Edit2 className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleDelete(item.id)}
+                      className="h-7 w-7 rounded-lg text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-    </ScrollArea>
+            </Card>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
   );
 };
