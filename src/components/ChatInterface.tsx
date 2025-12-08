@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Bot, User, ArrowDown } from "lucide-react";
+import { Send, Bot, User, ArrowDown, Mic } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { DownloadButton } from "./DownloadButton";
+import { VoiceOrb } from "./VoiceOrb";
 
 interface Message {
   role: "user" | "assistant";
@@ -29,11 +29,11 @@ export const ChatInterface = ({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  // Load chat history when conversation changes
   useEffect(() => {
     if (!conversationId) {
       setMessages([{
@@ -66,7 +66,6 @@ export const ChatInterface = ({
         }]);
       }
 
-      // Scroll to bottom when conversation loads
       setTimeout(() => {
         scrollRef.current?.scrollIntoView({ behavior: "smooth" });
       }, 100);
@@ -75,7 +74,6 @@ export const ChatInterface = ({
     loadChatHistory();
   }, [conversationId]);
 
-  // Smart auto-scroll: only scroll if user is near bottom
   useEffect(() => {
     if (!scrollContainerRef.current) return;
     
@@ -87,7 +85,6 @@ export const ChatInterface = ({
     }
   }, [messages]);
 
-  // Track scroll position to show/hide scroll button
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
     
@@ -129,7 +126,6 @@ export const ChatInterface = ({
 
       const userId = user.id;
 
-      // Save user message
       await supabase.from("chat_messages").insert({
         user_id: userId,
         conversation_id: conversationId,
@@ -137,12 +133,10 @@ export const ChatInterface = ({
         content: userInput,
       });
 
-      // Generate title from first message
       if (messages.length <= 1) {
         await generateTitle(userInput);
       }
 
-      // Get AI response with enhanced memory
       const { data, error } = await supabase.functions.invoke("chat", {
         body: {
           messages: [...messages, userMessage],
@@ -161,7 +155,6 @@ export const ChatInterface = ({
       
       setMessages((prev) => [...prev, assistantMessage]);
 
-      // Save assistant message
       if (user) {
         await supabase.from("chat_messages").insert({
           user_id: userId,
@@ -183,7 +176,6 @@ export const ChatInterface = ({
   };
 
   const detectDownloadableContent = (content: string): { filename: string; mimeType: string } | null => {
-    // Detect code blocks with language
     const codeMatch = content.match(/```(\w+)/);
     if (codeMatch) {
       const lang = codeMatch[1];
@@ -205,7 +197,6 @@ export const ChatInterface = ({
       };
     }
 
-    // Detect structured documents
     if (content.includes("# Product Requirements Document") || content.includes("# PRD")) {
       return { filename: "prd.md", mimeType: "text/markdown" };
     }
@@ -219,105 +210,152 @@ export const ChatInterface = ({
     return null;
   };
 
-  return (
-    <Card className="glass-card flex flex-col h-full shadow-xl border-border/30 rounded-3xl">
-      <div className="p-6 border-b border-border/30">
-        <h2 className="text-xl font-semibold bg-gradient-to-r from-gradient-start to-gradient-end bg-clip-text text-transparent">Chat with Topher</h2>
-      </div>
+  const handleMicClick = () => {
+    setIsListening(!isListening);
+    // Voice functionality can be added later with Web Speech API
+    toast({
+      title: "Voice Input",
+      description: "Voice input coming soon!",
+    });
+  };
 
+  const showEmptyState = messages.length <= 1 && messages[0]?.role === "assistant";
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Messages area */}
       <div 
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 p-6 overflow-y-auto relative"
+        className="flex-1 overflow-y-auto px-4 py-6"
       >
-        <div className="space-y-6">
-          {messages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`flex gap-4 fade-in ${
-                msg.role === "user" ? "justify-end" : "justify-start"
-              }`}
-            >
-              {msg.role === "assistant" && (
-                <div className="flex-shrink-0">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-gradient-start to-gradient-end flex items-center justify-center glow-effect">
-                    <Bot className="w-5 h-5 text-white" />
-                  </div>
-                </div>
-              )}
+        {showEmptyState ? (
+          <div className="h-full flex flex-col items-center justify-center">
+            <VoiceOrb 
+              isListening={isListening} 
+              onMicClick={handleMicClick}
+              size="lg"
+            />
+            <p className="mt-16 text-center text-muted-foreground max-w-md px-4">
+              Hello! I'm Topher, your AI assistant. Ask me anything or tap the orb to speak.
+            </p>
+          </div>
+        ) : (
+          <div className="max-w-3xl mx-auto space-y-6">
+            {messages.map((msg, idx) => (
               <div
-                className={`max-w-[75%] rounded-2xl px-5 py-4 ${
-                  msg.role === "user"
-                    ? "bg-gradient-to-br from-gradient-start to-gradient-end text-white shadow-lg shadow-glow-primary/20"
-                    : "bg-card/80 backdrop-blur-sm border border-border/30"
+                key={idx}
+                className={`flex gap-3 fade-in ${
+                  msg.role === "user" ? "justify-end" : "justify-start"
                 }`}
               >
-                {msg.role === "assistant" ? (
-                  <>
-                    <div className="prose prose-sm max-w-none">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {msg.content}
-                      </ReactMarkdown>
+                {msg.role === "assistant" && (
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
+                      <Bot className="w-4 h-4 text-primary" />
                     </div>
-                    {detectDownloadableContent(msg.content) && (
-                      <div className="mt-3 pt-3 border-t border-border/20">
-                        <DownloadButton
-                          content={msg.content}
-                          filename={detectDownloadableContent(msg.content)!.filename}
-                          mimeType={detectDownloadableContent(msg.content)!.mimeType}
-                        />
+                  </div>
+                )}
+                <div
+                  className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-4 py-3 ${
+                    msg.role === "user"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-card border border-border"
+                  }`}
+                >
+                  {msg.role === "assistant" ? (
+                    <>
+                      <div className="prose prose-sm max-w-none">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
                       </div>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-sm sm:text-base">{msg.content}</p>
+                      {detectDownloadableContent(msg.content) && (
+                        <div className="mt-3 pt-3 border-t border-border">
+                          <DownloadButton
+                            content={msg.content}
+                            filename={detectDownloadableContent(msg.content)!.filename}
+                            mimeType={detectDownloadableContent(msg.content)!.mimeType}
+                          />
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm sm:text-base">{msg.content}</p>
+                  )}
+                </div>
+                {msg.role === "user" && (
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
+                      <User className="w-4 h-4 text-foreground" />
+                    </div>
+                  </div>
                 )}
               </div>
-              {msg.role === "user" && (
+            ))}
+            
+            {loading && (
+              <div className="flex gap-3 justify-start fade-in">
                 <div className="flex-shrink-0">
-                  <div className="w-10 h-10 rounded-2xl bg-card/80 backdrop-blur-sm border border-border/30 flex items-center justify-center">
-                    <User className="w-5 h-5 text-primary" />
+                  <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
+                    <Bot className="w-4 h-4 text-primary" />
                   </div>
                 </div>
-              )}
-            </div>
-          ))}
-          <div ref={scrollRef} />
-        </div>
+                <div className="bg-card border border-border rounded-2xl px-4 py-3">
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div ref={scrollRef} />
+          </div>
+        )}
 
         {/* Scroll to bottom button */}
         {showScrollButton && (
           <Button
             onClick={scrollToBottom}
             size="icon"
-            className="absolute bottom-4 right-4 rounded-full shadow-xl shadow-glow-primary/30 animate-pulse-glow"
-            variant="gradient"
+            className="fixed bottom-28 right-6 rounded-full shadow-lg bg-card border border-border hover:bg-secondary z-10"
+            variant="ghost"
           >
             <ArrowDown className="w-5 h-5" />
           </Button>
         )}
       </div>
 
-      <div className="p-6 border-t border-border/30 bg-card/30 backdrop-blur-sm">
-        <div className="flex gap-3">
+      {/* Input area */}
+      <div className="flex-shrink-0 p-4 border-t border-border bg-card/50 backdrop-blur-sm">
+        <div className="max-w-3xl mx-auto flex gap-3">
+          <Button
+            onClick={handleMicClick}
+            variant="ghost"
+            size="icon"
+            className={`rounded-xl flex-shrink-0 ${isListening ? 'bg-primary/20 text-primary' : 'hover:bg-secondary'}`}
+          >
+            <Mic className="w-5 h-5" />
+          </Button>
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={(e) => e.key === "Enter" && !loading && sendMessage()}
             placeholder="Type your message..."
             disabled={loading}
-            className="flex-1 rounded-2xl bg-input/50 border-border/30 focus:border-primary/50 h-12 px-5 backdrop-blur-sm"
+            className="flex-1 rounded-xl bg-input border-border/50 focus:border-primary/50 h-11 px-4"
           />
           <Button 
             onClick={sendMessage}
             disabled={loading || !input.trim()}
-            variant="gradient"
-            className="rounded-2xl px-6 h-12"
+            className="rounded-xl px-4 h-11"
           >
             <Send className="w-5 h-5" />
           </Button>
         </div>
       </div>
-    </Card>
+    </div>
   );
 };

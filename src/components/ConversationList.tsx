@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -149,12 +148,11 @@ export const ConversationList = ({
 
   return (
     <>
-      <Card className="h-full flex flex-col bg-transparent border-none shadow-none">
-        <div className="p-4 border-b border-border/30">
+      <div className="h-full flex flex-col">
+        <div className="p-4 border-b border-border/50">
           <Button
             onClick={onNewConversation}
-            className="w-full rounded-2xl"
-            variant="gradient"
+            className="w-full rounded-xl"
             size="sm"
           >
             <MessageSquarePlus className="w-4 h-4 mr-2" />
@@ -162,14 +160,14 @@ export const ConversationList = ({
           </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {conversations.map((conv) => (
             <div
               key={conv.id}
-              className={`group relative rounded-2xl p-4 cursor-pointer transition-all ${
+              className={`group relative rounded-xl p-3 cursor-pointer transition-all ${
                 activeConversationId === conv.id
-                  ? "bg-gradient-to-r from-gradient-start to-gradient-end text-white shadow-lg shadow-glow-primary/20"
-                  : "bg-card/50 hover:bg-card/80 backdrop-blur-sm border border-border/30"
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-secondary"
               }`}
               onClick={() => onConversationSelect(conv.id)}
             >
@@ -179,46 +177,46 @@ export const ConversationList = ({
                     value={editTitle}
                     onChange={(e) => setEditTitle(e.target.value)}
                     onKeyPress={(e) => e.key === "Enter" && saveEdit(conv.id)}
-                    className="h-8 text-sm rounded-xl bg-input/50 border-border/30"
+                    className="h-7 text-sm rounded-lg bg-input border-border/50"
                     autoFocus
                   />
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-8 w-8 rounded-xl"
+                    className="h-7 w-7 rounded-lg"
                     onClick={() => saveEdit(conv.id)}
                   >
-                    <Check className="w-4 h-4" />
+                    <Check className="w-3 h-3" />
                   </Button>
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-8 w-8 rounded-xl"
+                    className="h-7 w-7 rounded-lg"
                     onClick={cancelEdit}
                   >
-                    <X className="w-4 h-4" />
+                    <X className="w-3 h-3" />
                   </Button>
                 </div>
               ) : (
                 <>
-                  <div className={`text-sm font-medium truncate pr-20 ${
-                    activeConversationId === conv.id ? "text-white" : "text-foreground"
+                  <div className={`text-sm font-medium truncate pr-16 ${
+                    activeConversationId === conv.id ? "text-primary-foreground" : "text-foreground"
                   }`}>
                     {conv.title}
                   </div>
-                  <div className={`text-xs mt-1 ${
-                    activeConversationId === conv.id ? "text-white/70" : "text-muted-foreground"
+                  <div className={`text-xs mt-0.5 ${
+                    activeConversationId === conv.id ? "text-primary-foreground/70" : "text-muted-foreground"
                   }`}>
                     {new Date(conv.updated_at).toLocaleDateString()}
                   </div>
                   <div
-                    className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 flex gap-1"
+                    className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 flex gap-0.5 transition-opacity"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <Button
                       size="icon"
                       variant="ghost"
-                      className={`h-8 w-8 rounded-xl ${activeConversationId === conv.id ? "hover:bg-white/20 text-white" : ""}`}
+                      className={`h-6 w-6 rounded-md ${activeConversationId === conv.id ? "hover:bg-primary-foreground/20 text-primary-foreground" : "hover:bg-secondary"}`}
                       onClick={() => startEdit(conv)}
                     >
                       <Edit2 className="w-3 h-3" />
@@ -226,7 +224,7 @@ export const ConversationList = ({
                     <Button
                       size="icon"
                       variant="ghost"
-                      className={`h-8 w-8 rounded-xl ${activeConversationId === conv.id ? "hover:bg-white/20 text-white" : ""}`}
+                      className={`h-6 w-6 rounded-md ${activeConversationId === conv.id ? "hover:bg-primary-foreground/20 text-primary-foreground" : "hover:bg-secondary"}`}
                       onClick={() => archiveConversation(conv.id)}
                     >
                       <Archive className="w-3 h-3" />
@@ -234,7 +232,7 @@ export const ConversationList = ({
                     <Button
                       size="icon"
                       variant="ghost"
-                      className={`h-8 w-8 rounded-xl text-destructive ${activeConversationId === conv.id ? "hover:bg-white/20" : ""}`}
+                      className={`h-6 w-6 rounded-md text-destructive ${activeConversationId === conv.id ? "hover:bg-primary-foreground/20" : "hover:bg-secondary"}`}
                       onClick={() => confirmDelete(conv.id)}
                     >
                       <Trash2 className="w-3 h-3" />
@@ -245,10 +243,10 @@ export const ConversationList = ({
             </div>
           ))}
         </div>
-      </Card>
+      </div>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="bg-card border-border">
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
             <AlertDialogDescription>
@@ -256,8 +254,8 @@ export const ConversationList = ({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={deleteConversation}>Delete</AlertDialogAction>
+            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteConversation} className="rounded-xl">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

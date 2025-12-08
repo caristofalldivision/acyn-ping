@@ -2,103 +2,95 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Neutral dark theme design system */
 
 @layer base {
   :root {
-    --background: 240 10% 4%;
-    --foreground: 280 5% 95%;
+    --background: 222 20% 6%;
+    --foreground: 210 20% 95%;
 
-    --card: 240 8% 8%;
-    --card-foreground: 280 5% 95%;
+    --card: 222 18% 10%;
+    --card-foreground: 210 20% 95%;
 
-    --popover: 240 10% 6%;
-    --popover-foreground: 280 5% 95%;
+    --popover: 222 20% 8%;
+    --popover-foreground: 210 20% 95%;
 
-    --primary: 280 100% 70%;
-    --primary-foreground: 280 5% 10%;
+    --primary: 220 70% 55%;
+    --primary-foreground: 210 20% 98%;
 
-    --secondary: 320 100% 65%;
-    --secondary-foreground: 280 5% 95%;
+    --secondary: 220 15% 18%;
+    --secondary-foreground: 210 20% 95%;
 
-    --muted: 240 5% 15%;
-    --muted-foreground: 280 5% 60%;
+    --muted: 220 15% 15%;
+    --muted-foreground: 210 15% 55%;
 
-    --accent: 300 100% 70%;
-    --accent-foreground: 280 5% 10%;
+    --accent: 220 60% 50%;
+    --accent-foreground: 210 20% 98%;
 
     --destructive: 0 70% 50%;
-    --destructive-foreground: 280 5% 95%;
+    --destructive-foreground: 210 20% 98%;
 
-    --border: 280 20% 15%;
-    --input: 240 10% 10%;
-    --ring: 280 100% 70%;
+    --border: 220 15% 18%;
+    --input: 222 18% 12%;
+    --ring: 220 70% 55%;
 
-    --radius: 1.25rem;
+    --radius: 1rem;
 
-    --gradient-start: 280 100% 65%;
-    --gradient-mid: 300 100% 70%;
-    --gradient-end: 320 100% 70%;
+    --orb-core: 220 80% 60%;
+    --orb-glow: 220 90% 70%;
+    --orb-outer: 200 60% 50%;
     
-    --glow-primary: 280 100% 70%;
-    --glow-secondary: 320 100% 70%;
-    
-    --sidebar-background: 240 10% 6%;
-    --sidebar-foreground: 280 5% 95%;
-    --sidebar-primary: 280 100% 70%;
-    --sidebar-primary-foreground: 280 5% 10%;
-    --sidebar-accent: 240 8% 12%;
-    --sidebar-accent-foreground: 280 5% 95%;
-    --sidebar-border: 280 20% 15%;
-    --sidebar-ring: 280 100% 70%;
+    --sidebar-background: 222 20% 8%;
+    --sidebar-foreground: 210 20% 95%;
+    --sidebar-primary: 220 70% 55%;
+    --sidebar-primary-foreground: 210 20% 98%;
+    --sidebar-accent: 220 15% 15%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 220 15% 18%;
+    --sidebar-ring: 220 70% 55%;
   }
 
   .dark {
-    --background: 240 10% 4%;
-    --foreground: 280 5% 95%;
+    --background: 222 20% 6%;
+    --foreground: 210 20% 95%;
 
-    --card: 240 8% 8%;
-    --card-foreground: 280 5% 95%;
+    --card: 222 18% 10%;
+    --card-foreground: 210 20% 95%;
 
-    --popover: 240 10% 6%;
-    --popover-foreground: 280 5% 95%;
+    --popover: 222 20% 8%;
+    --popover-foreground: 210 20% 95%;
 
-    --primary: 280 100% 70%;
-    --primary-foreground: 280 5% 10%;
+    --primary: 220 70% 55%;
+    --primary-foreground: 210 20% 98%;
 
-    --secondary: 320 100% 65%;
-    --secondary-foreground: 280 5% 95%;
+    --secondary: 220 15% 18%;
+    --secondary-foreground: 210 20% 95%;
 
-    --muted: 240 5% 15%;
-    --muted-foreground: 280 5% 60%;
+    --muted: 220 15% 15%;
+    --muted-foreground: 210 15% 55%;
 
-    --accent: 300 100% 70%;
-    --accent-foreground: 280 5% 10%;
+    --accent: 220 60% 50%;
+    --accent-foreground: 210 20% 98%;
 
     --destructive: 0 70% 50%;
-    --destructive-foreground: 280 5% 95%;
+    --destructive-foreground: 210 20% 98%;
 
-    --border: 280 20% 15%;
-    --input: 240 10% 10%;
-    --ring: 280 100% 70%;
+    --border: 220 15% 18%;
+    --input: 222 18% 12%;
+    --ring: 220 70% 55%;
+
+    --orb-core: 220 80% 60%;
+    --orb-glow: 220 90% 70%;
+    --orb-outer: 200 60% 50%;
     
-    --gradient-start: 280 100% 65%;
-    --gradient-mid: 300 100% 70%;
-    --gradient-end: 320 100% 70%;
-    
-    --glow-primary: 280 100% 70%;
-    --glow-secondary: 320 100% 70%;
-    
-    --sidebar-background: 240 10% 6%;
-    --sidebar-foreground: 280 5% 95%;
-    --sidebar-primary: 280 100% 70%;
-    --sidebar-primary-foreground: 280 5% 10%;
-    --sidebar-accent: 240 8% 12%;
-    --sidebar-accent-foreground: 280 5% 95%;
-    --sidebar-border: 280 20% 15%;
-    --sidebar-ring: 280 100% 70%;
+    --sidebar-background: 222 20% 8%;
+    --sidebar-foreground: 210 20% 95%;
+    --sidebar-primary: 220 70% 55%;
+    --sidebar-primary-foreground: 210 20% 98%;
+    --sidebar-accent: 220 15% 15%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 220 15% 18%;
+    --sidebar-ring: 220 70% 55%;
   }
 }
 
@@ -114,54 +106,75 @@ All colors MUST be HSL.
 }
 
 @layer utilities {
-  /* Modern design with purple/pink gradient theme */
-  
   .glass-card {
-    background: hsl(var(--card) / 0.6);
+    background: hsl(var(--card) / 0.8);
     backdrop-filter: blur(20px);
-    border: 1px solid hsl(var(--border) / 0.3);
-  }
-  
-  .gradient-primary {
-    background: linear-gradient(135deg, hsl(var(--gradient-start)), hsl(var(--gradient-end)));
-  }
-  
-  .gradient-glow {
-    background: linear-gradient(135deg, hsl(var(--gradient-start)), hsl(var(--gradient-end)));
-    box-shadow: 0 0 30px hsl(var(--glow-primary) / 0.3);
-  }
-  
-  .glow-effect {
-    box-shadow: 0 0 20px hsl(var(--glow-primary) / 0.2),
-                0 0 40px hsl(var(--glow-primary) / 0.1);
+    border: 1px solid hsl(var(--border) / 0.5);
   }
   
   .fade-in {
-    animation: fadeIn 0.5s ease-in;
+    animation: fadeIn 0.4s ease-out;
   }
   
   @keyframes fadeIn {
     from {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(8px);
     }
     to {
       opacity: 1;
       transform: translateY(0);
     }
   }
-  
-  @keyframes pulse-glow {
+
+  /* Voice Orb Animations */
+  @keyframes orb-pulse {
     0%, 100% {
-      box-shadow: 0 0 20px hsl(var(--glow-primary) / 0.3);
+      transform: scale(1);
+      opacity: 0.8;
     }
     50% {
-      box-shadow: 0 0 30px hsl(var(--glow-primary) / 0.5);
+      transform: scale(1.05);
+      opacity: 1;
     }
   }
-  
-  .animate-pulse-glow {
-    animation: pulse-glow 2s ease-in-out infinite;
+
+  @keyframes orb-glow-pulse {
+    0%, 100% {
+      opacity: 0.3;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.6;
+      transform: scale(1.1);
+    }
+  }
+
+  @keyframes orb-ring {
+    0% {
+      transform: scale(0.8);
+      opacity: 0.8;
+    }
+    100% {
+      transform: scale(1.5);
+      opacity: 0;
+    }
+  }
+
+  .animate-orb-pulse {
+    animation: orb-pulse 3s ease-in-out infinite;
+  }
+
+  .animate-orb-glow {
+    animation: orb-glow-pulse 2s ease-in-out infinite;
+  }
+
+  .animate-orb-ring {
+    animation: orb-ring 2s ease-out infinite;
+  }
+
+  .animate-orb-ring-delayed {
+    animation: orb-ring 2s ease-out infinite 0.5s;
   }
 
   /* Markdown prose styles */
@@ -210,7 +223,7 @@ All colors MUST be HSL.
     background: hsl(var(--muted));
     color: hsl(var(--foreground));
     padding: 0.2em 0.4em;
-    border-radius: 3px;
+    border-radius: 4px;
     font-size: 0.9em;
     font-family: 'Courier New', monospace;
   }
@@ -218,7 +231,7 @@ All colors MUST be HSL.
   .prose pre {
     background: hsl(var(--muted));
     padding: 1em;
-    border-radius: 6px;
+    border-radius: 8px;
     overflow-x: auto;
     margin: 1em 0;
   }
