@@ -8,3 +8,12 @@ verify_jwt = false
 
 [functions.background-learning]
 verify_jwt = false
+
+[functions.send-email]
+verify_jwt = false
+
+[functions.send-sms]
+verify_jwt = false
+
+[functions.manage-calendar]
+verify_jwt = false

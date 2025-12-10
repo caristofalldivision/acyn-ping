@@ -5,6 +5,125 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Tool definitions for AI
+const tools = [
+  {
+    type: "function",
+    function: {
+      name: "send_email",
+      description: "Send an email to a recipient. Use this when the user asks to send an email, compose a message, or reach out to someone via email.",
+      parameters: {
+        type: "object",
+        properties: {
+          to: { type: "string", description: "Recipient email address" },
+          subject: { type: "string", description: "Email subject line" },
+          body: { type: "string", description: "Email body content" },
+        },
+        required: ["to", "subject", "body"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "send_sms",
+      description: "Send an SMS text message to a phone number. Use this when the user asks to text, send a message, or reach out to someone via SMS.",
+      parameters: {
+        type: "object",
+        properties: {
+          to: { type: "string", description: "Phone number with country code (e.g., +254712345678)" },
+          message: { type: "string", description: "SMS message content (keep under 160 characters if possible)" },
+        },
+        required: ["to", "message"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "schedule_event",
+      description: "Create a calendar event, meeting, reminder, or appointment. Use this when the user wants to schedule something.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Event title or name" },
+          start_time: { type: "string", description: "Event start time in ISO 8601 format (e.g., 2025-12-11T15:00:00Z)" },
+          end_time: { type: "string", description: "Event end time in ISO 8601 format (optional, defaults to 1 hour after start)" },
+          description: { type: "string", description: "Event description or notes (optional)" },
+          location: { type: "string", description: "Event location (optional)" },
+          event_type: { type: "string", enum: ["meeting", "reminder", "deadline", "event"], description: "Type of event (optional)" },
+          attendees: { type: "array", items: { type: "string" }, description: "List of attendee emails (optional)" },
+        },
+        required: ["title", "start_time"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_events",
+      description: "List upcoming calendar events. Use this when the user asks about their schedule, upcoming meetings, or what's on their calendar.",
+      parameters: {
+        type: "object",
+        properties: {
+          days: { type: "number", description: "Number of days ahead to look (default: 7)" },
+        }
+      }
+    }
+  }
+];
+
+// Execute tool calls
+async function executeTool(toolName: string, args: any, userId: string, supabaseUrl: string): Promise<any> {
+  console.log(`Executing tool: ${toolName} with args:`, args);
+  
+  const headers = {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+  };
+
+  switch (toolName) {
+    case "send_email": {
+      const response = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ ...args, userId }),
+      });
+      return await response.json();
+    }
+    
+    case "send_sms": {
+      const response = await fetch(`${supabaseUrl}/functions/v1/send-sms`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ ...args, userId }),
+      });
+      return await response.json();
+    }
+    
+    case "schedule_event": {
+      const response = await fetch(`${supabaseUrl}/functions/v1/manage-calendar`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ action: "create", userId, event: args }),
+      });
+      return await response.json();
+    }
+    
+    case "list_events": {
+      const response = await fetch(`${supabaseUrl}/functions/v1/manage-calendar`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ action: "list", userId, days: args.days || 7 }),
+      });
+      return await response.json();
+    }
+    
+    default:
+      return { error: `Unknown tool: ${toolName}` };
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -129,7 +248,6 @@ serve(async (req) => {
       if (stylePrefs && stylePrefs.length > 0) {
         styleInstructions = "\n\nCUSTOM COMMUNICATION STYLE (MUST FOLLOW):\n";
         stylePrefs.forEach((pref: any) => {
-          // Parse specific rules
           if (pref.key.includes("response_length") && pref.value.includes("brief")) {
             styleInstructions += "- Keep responses SHORT and CONCISE by default. Only elaborate when explicitly asked.\n";
           }
@@ -139,7 +257,6 @@ serve(async (req) => {
           if (pref.key.includes("detail") && pref.value.includes("summarize")) {
             styleInstructions += "- Provide summaries first. Only explain in detail when user asks.\n";
           }
-          // Generic catch-all
           styleInstructions += `- ${pref.key}: ${pref.value}\n`;
         });
       }
@@ -154,176 +271,58 @@ CORE PERSONALITY:
 - Direct and honest - if you don't know something or if there's a better approach, say so
 - Adaptive - match the user's tone and level of formality
 
+COMMUNICATION CAPABILITIES:
+You can send emails, SMS messages, and manage calendar events. When users ask you to:
+
+1. SEND EMAIL: Use the send_email function
+   - Example requests: "Email john@example.com about the meeting", "Send a message to sarah@company.com"
+   - You'll extract the recipient, compose a professional subject and body
+   - Always confirm after sending
+   
+2. SEND SMS: Use the send_sms function
+   - Example requests: "Text +254712345678 that I'm running late", "Send an SMS to..."
+   - Phone numbers should include country code (e.g., +254, +1, +44)
+   - Keep messages concise (under 160 characters when possible)
+   - Always confirm after sending
+   
+3. SCHEDULE EVENTS: Use the schedule_event function
+   - Example requests: "Schedule a meeting tomorrow at 3pm", "Add a reminder for..."
+   - Parse dates/times relative to today's date (${new Date().toISOString().split('T')[0]})
+   - Default duration is 1 hour if not specified
+   - Always confirm what was scheduled
+   
+4. VIEW CALENDAR: Use the list_events function
+   - Example requests: "What's on my schedule?", "Show my upcoming meetings"
+   - Default is next 7 days
+
+IMPORTANT: When asked to perform these actions, USE THE TOOLS. Don't just describe what you would do.
+
 EXPERTISE DOMAINS:
-
-1. SOFTWARE DEVELOPMENT & CODING
-   - Full-stack development (Frontend: React, Vue, Angular; Backend: Node.js, Python, Java, Go)
-   - Mobile development (React Native, Flutter, iOS, Android)
-   - Database design and optimization (SQL, NoSQL, PostgreSQL, MongoDB)
-   - API design (REST, GraphQL, WebSockets)
-   - DevOps and CI/CD (Docker, Kubernetes, GitHub Actions)
-   - System architecture and design patterns
-   - Code review, debugging, and optimization
-   - Testing strategies (unit, integration, e2e)
-   - Security best practices and penetration testing
-
-2. DIGITAL MARKETING & ADVERTISING
-   - SEO strategy and implementation
-   - SEM and Google Ads management
-   - Social media advertising (Facebook, Instagram, LinkedIn, TikTok)
-   - Content marketing and distribution
-   - Email marketing campaigns
-   - Conversion rate optimization (CRO)
-   - Marketing analytics and attribution
-   - Brand positioning and messaging
-   - Influencer marketing strategies
-   - Affiliate marketing programs
-
-3. SOCIAL MEDIA MANAGEMENT
-   - Platform-specific strategies (Instagram, TikTok, LinkedIn, Twitter, Facebook)
-   - Content calendar planning and scheduling
-   - Community management and engagement tactics
-   - Social media analytics and reporting
-   - Viral content creation principles
-   - Platform algorithm optimization
-   - Crisis management and reputation monitoring
-   - Social commerce strategies
-   - Influencer partnerships
-
-4. CONTENT CREATION
-   - Copywriting (sales pages, ads, emails, blogs)
-   - Video script writing (YouTube, TikTok, ads)
-   - Podcast planning and production
-   - Technical writing and documentation
-   - Storytelling and narrative structure
-   - SEO-optimized content
-   - Visual content strategy
-   - Brand voice development
-   - Content repurposing strategies
-
-5. BUSINESS STRATEGY & PLANNING
-   - Business model development and validation
-   - Market research and competitive analysis
-   - Go-to-market strategy
-   - Pricing strategy and optimization
-   - Growth hacking and scaling strategies
-   - Partnership and alliance development
-   - Risk assessment and mitigation
-   - Strategic roadmap creation
-   - Pivot strategies and adaptation
-
-6. PRODUCT MANAGEMENT
-   - Product Requirements Documents (PRDs)
-   - User story creation and management
-   - Product roadmap planning
-   - Feature prioritization frameworks (RICE, ICE)
-   - User research and validation
-   - A/B testing strategies
-   - Product analytics and metrics
-   - Agile/Scrum methodologies
-   - Product launch strategies
-
-7. PROJECT MANAGEMENT
-   - Project planning and scheduling
-   - Resource allocation and optimization
-   - Risk management
-   - Stakeholder communication
-   - Agile, Scrum, Kanban methodologies
-   - Budget management
-   - Timeline estimation
-   - Team coordination and collaboration
-   - Project documentation
-
-8. LEGAL DOCUMENTS & CONTRACTS
-   - Service agreements and contracts
-   - Non-Disclosure Agreements (NDAs)
-   - Employment contracts
-   - Terms of Service (ToS)
-   - Privacy policies (GDPR, CCPA compliant)
-   - Partnership agreements
-   - Licensing agreements
-   - Statement of Work (SOW)
-   - Independent contractor agreements
-
-9. FINANCIAL PLANNING & ANALYSIS
-   - Budget creation and management
-   - Financial forecasting and modeling
-   - Investment analysis and recommendations
-   - Profit & Loss (P&L) statements
-   - Cash flow management
-   - Fundraising strategies
-   - Pricing models
-   - ROI calculations
-   - Cost-benefit analysis
-
-10. DATA ANALYSIS & RESEARCH
-    - Statistical analysis and interpretation
-    - Market research methodologies
-    - Data visualization and reporting
-    - A/B test design and analysis
-    - Survey design and analysis
-    - Competitor analysis
-    - Trend analysis and forecasting
-    - Customer insights and segmentation
-
-TASK CAPABILITIES:
-
-1. PLANNING & STRATEGY
-   - Create detailed project plans with timelines and milestones
-   - Develop comprehensive business strategies
-   - Design content calendars and marketing campaigns
-   - Plan product launches and go-to-market strategies
-   - Structure research methodologies
-
-2. DOCUMENT GENERATION
-   - Write Professional PRDs with user stories, requirements, and acceptance criteria
-   - Draft legal contracts and agreements
-   - Create business proposals and pitch decks
-   - Develop technical documentation
-   - Write comprehensive reports and analyses
-   - Generate SOWs and project briefs
-
-3. PROBLEM SOLVING & ANALYSIS
-   - Debug code and identify technical issues
-   - Analyze business problems and recommend solutions
-   - Evaluate market opportunities
-   - Assess risks and develop mitigation strategies
-   - Optimize processes and workflows
-
-4. CREATIVE WORK
-   - Write compelling marketing copy
-   - Develop brand messaging and positioning
-   - Create content outlines and scripts
-   - Design user experiences and interfaces (conceptual)
-   - Brainstorm creative campaign ideas
-
-MEMORY & CONTEXT:
-- You have access to the user's personal knowledge base (provided below)
-- You can reference information from previous conversations across all chats
-- You maintain context awareness to provide personalized responses
-- When pulling from previous conversations, mention that you're referencing past discussions
+- Software Development & Coding (all major languages/frameworks)
+- Digital Marketing & Advertising
+- Social Media Management & Strategy
+- Content Creation & Copywriting
+- Business Strategy & Planning
+- Product Management (PRD creation)
+- Project Management
+- Legal Documents (contracts, NDAs)
+- Financial Planning & Analysis
+- Data Analysis & Research
 
 RESPONSE GUIDELINES:
 - Start responses with direct answers, then elaborate if needed
 - Use markdown formatting for clarity (headers, lists, code blocks)
-- When generating documents, always ensure they are well-structured and professional
+- When generating documents, ensure they are well-structured and professional
 - Provide actionable next steps when relevant
 - Ask clarifying questions when requirements are ambiguous
-- Suggest alternatives and trade-offs when appropriate
 ${styleInstructions}
-
-DOCUMENT TEMPLATES:
-When creating documents, follow professional standards:
-- PRDs: Include overview, goals, user stories, requirements, success metrics, timeline
-- Contracts: Include parties, terms, obligations, payment terms, termination clauses
-- Proposals: Include executive summary, problem statement, solution, timeline, pricing
-- Plans: Include objectives, strategies, tactics, resources, timeline, KPIs
 
 ${memoryContext}
 ${userKnowledgeContext}
 
-Remember: You're not just answering questions, you're a strategic partner helping ${userName} achieve their goals across all domains of work and life. You have memory across all conversations and can reference past discussions to provide better context and continuity. When you reference learned information, you can mention that you remember it from previous conversations.`;
+Remember: You're not just answering questions, you're a strategic partner helping ${userName} achieve their goals. You have memory across all conversations and can reference past discussions.`;
 
+    // First API call - check if tool use is needed
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -336,6 +335,8 @@ Remember: You're not just answering questions, you're a strategic partner helpin
           { role: "system", content: systemPrompt },
           ...messages,
         ],
+        tools: tools,
+        tool_choice: "auto",
       }),
     });
 
@@ -343,45 +344,86 @@ Remember: You're not just answering questions, you're a strategic partner helpin
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
-          {
-            status: 429,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
       if (response.status === 402) {
         return new Response(
           JSON.stringify({ error: "Payment required. Please add credits to your Lovable workspace." }),
-          {
-            status: 402,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
       throw new Error(`AI gateway error: ${response.status}`);
     }
 
     const data = await response.json();
-    const reply = data.choices[0].message.content;
+    const assistantMessage = data.choices[0].message;
+
+    // Check if we need to execute tools
+    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+      console.log("Tool calls detected:", assistantMessage.tool_calls);
+      
+      // Execute all tool calls
+      const toolResults = [];
+      for (const toolCall of assistantMessage.tool_calls) {
+        const args = JSON.parse(toolCall.function.arguments);
+        const result = await executeTool(toolCall.function.name, args, userId, supabaseUrl);
+        toolResults.push({
+          tool_call_id: toolCall.id,
+          role: "tool",
+          name: toolCall.function.name,
+          content: JSON.stringify(result),
+        });
+        console.log(`Tool ${toolCall.function.name} result:`, result);
+      }
+
+      // Second API call with tool results
+      const finalResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...messages,
+            assistantMessage,
+            ...toolResults,
+          ],
+        }),
+      });
+
+      if (!finalResponse.ok) {
+        const errorText = await finalResponse.text();
+        console.error("AI gateway error on final response:", finalResponse.status, errorText);
+        throw new Error(`AI gateway error: ${finalResponse.status}`);
+      }
+
+      const finalData = await finalResponse.json();
+      const reply = finalData.choices[0].message.content;
+
+      return new Response(
+        JSON.stringify({ reply }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // No tools called, return direct response
+    const reply = assistantMessage.content;
 
     return new Response(
       JSON.stringify({ reply }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Error in chat function:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
