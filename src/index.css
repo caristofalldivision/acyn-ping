@@ -177,6 +177,53 @@
     animation: orb-ring 2s ease-out infinite 0.5s;
   }
 
+  /* Floating Orb Animations */
+  @keyframes float-orb {
+    0%, 100% { 
+      transform: translateY(0); 
+    }
+    50% { 
+      transform: translateY(-6px); 
+    }
+  }
+
+  @keyframes orb-idle-breathe {
+    0%, 100% { 
+      opacity: 0.4; 
+      transform: scale(1);
+    }
+    50% { 
+      opacity: 0.6; 
+      transform: scale(1.03);
+    }
+  }
+
+  @keyframes bubble-expand {
+    from { 
+      transform: scale(0.3) translateY(20px); 
+      opacity: 0; 
+    }
+    to { 
+      transform: scale(1) translateY(0); 
+      opacity: 1; 
+    }
+  }
+
+  .floating-orb {
+    animation: float-orb 3s ease-in-out infinite, 
+               orb-idle-breathe 4s ease-in-out infinite;
+  }
+
+  .floating-orb:hover {
+    animation: none;
+    opacity: 1 !important;
+  }
+
+  .bubble-chat-enter {
+    animation: bubble-expand 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    transform-origin: bottom right;
+  }
+
   /* Markdown prose styles */
   .prose {
     color: hsl(var(--foreground));
