@@ -54,10 +54,15 @@ export const BubbleChat = ({ onClose }: BubbleChatProps) => {
         return;
       }
 
+      // Build messages array for the chat function
+      const chatMessages = [
+        ...messages.slice(-4).map(m => ({ role: m.role, content: m.content })),
+        { role: "user", content }
+      ];
+
       const { data, error } = await supabase.functions.invoke("chat", {
         body: {
-          message: content,
-          conversationHistory: messages.slice(-4), // Keep context minimal
+          messages: chatMessages,
           userKnowledge: [],
           userId: session.user.id,
         },
@@ -67,7 +72,7 @@ export const BubbleChat = ({ onClose }: BubbleChatProps) => {
 
       const assistantMessage: Message = {
         role: "assistant",
-        content: data.response || "I couldn't process that request.",
+        content: data.reply || "I couldn't process that request.",
       };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
