@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Send, Calendar, Mail, Clock, MessageSquare } from "lucide-react";
+import { X, Send, Calendar, Mail, Clock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -54,7 +54,6 @@ export const BubbleChat = ({ onClose }: BubbleChatProps) => {
         return;
       }
 
-      // Build messages array for the chat function
       const chatMessages = [
         ...messages.slice(-4).map(m => ({ role: m.role, content: m.content })),
         { role: "user", content }
@@ -109,7 +108,7 @@ export const BubbleChat = ({ onClose }: BubbleChatProps) => {
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-border/50">
         <div className="flex items-center gap-2">
-          <MessageSquare className="w-4 h-4 text-primary" />
+          <Sparkles className="w-4 h-4 text-primary" />
           <span className="text-sm font-medium text-foreground">Quick Chat</span>
         </div>
         <Button
@@ -165,7 +164,7 @@ export const BubbleChat = ({ onClose }: BubbleChatProps) => {
             key={action.label}
             variant="outline"
             size="sm"
-            className="flex-1 h-8 text-xs gap-1 rounded-full border-border/50 hover:bg-muted"
+            className="flex-1 h-8 text-xs gap-1 rounded-full border-border/50 hover:bg-muted hover:border-primary/50"
             onClick={() => sendMessage(action.prompt)}
             disabled={isLoading}
           >
@@ -182,7 +181,7 @@ export const BubbleChat = ({ onClose }: BubbleChatProps) => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type a message..."
-            className="flex-1 h-9 text-sm rounded-full bg-muted/50 border-border/50"
+            className="flex-1 h-9 text-sm rounded-full bg-muted/50 border-border/50 focus-visible:border-primary/50"
             disabled={isLoading}
           />
           <Button
