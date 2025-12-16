@@ -51,10 +51,10 @@ export default {
           primary: "hsl(var(--glow-primary))",
           secondary: "hsl(var(--glow-secondary))",
         },
-        gradient: {
-          start: "hsl(var(--gradient-start))",
-          mid: "hsl(var(--gradient-mid))",
-          end: "hsl(var(--gradient-end))",
+        action: {
+          teal: "hsl(var(--action-teal))",
+          green: "hsl(var(--action-green))",
+          peach: "hsl(var(--action-peach))",
         },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",

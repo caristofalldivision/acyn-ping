@@ -7,8 +7,8 @@ interface FloatingOrbProps {
 }
 
 const STORAGE_KEY = "topher-orb-position";
-const ORB_SIZE = 56; // 14 * 4 = 56px (w-14)
-const EDGE_MARGIN = 24; // 6 * 4 = 24px margin from edges
+const ORB_SIZE = 56;
+const EDGE_MARGIN = 24;
 
 interface Position {
   x: number;
@@ -25,7 +25,6 @@ const loadPosition = (): Position => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const pos = JSON.parse(saved);
-      // Validate position is still on screen
       const maxX = window.innerWidth - ORB_SIZE;
       const maxY = window.innerHeight - ORB_SIZE;
       return {
@@ -47,14 +46,12 @@ const savePosition = (pos: Position) => {
   }
 };
 
-// Snap to nearest edge
 const snapToEdge = (pos: Position): Position => {
   const screenWidth = window.innerWidth;
   const screenHeight = window.innerHeight;
   const centerX = pos.x + ORB_SIZE / 2;
   const centerY = pos.y + ORB_SIZE / 2;
 
-  // Calculate distances to each edge
   const distLeft = centerX;
   const distRight = screenWidth - centerX;
   const distTop = centerY;
@@ -62,7 +59,6 @@ const snapToEdge = (pos: Position): Position => {
 
   const minDist = Math.min(distLeft, distRight, distTop, distBottom);
 
-  // Snap to the nearest edge
   if (minDist === distLeft) {
     return { x: EDGE_MARGIN, y: Math.min(Math.max(EDGE_MARGIN, pos.y), screenHeight - ORB_SIZE - EDGE_MARGIN) };
   } else if (minDist === distRight) {
@@ -82,7 +78,6 @@ export const FloatingOrb = ({ onClick, isExpanded }: FloatingOrbProps) => {
   const hasMoved = useRef(false);
   const orbRef = useRef<HTMLButtonElement>(null);
 
-  // Handle window resize
   useEffect(() => {
     const handleResize = () => {
       setPosition((prev) => {
@@ -115,7 +110,6 @@ export const FloatingOrb = ({ onClick, isExpanded }: FloatingOrbProps) => {
     (clientX: number, clientY: number) => {
       if (!isDragging) return;
 
-      // Check if moved enough to count as a drag
       if (dragStartPos.current) {
         const dx = Math.abs(clientX - dragStartPos.current.x);
         const dy = Math.abs(clientY - dragStartPos.current.y);
@@ -127,7 +121,6 @@ export const FloatingOrb = ({ onClick, isExpanded }: FloatingOrbProps) => {
       const newX = clientX - dragOffset.x;
       const newY = clientY - dragOffset.y;
 
-      // Constrain to screen bounds
       const maxX = window.innerWidth - ORB_SIZE;
       const maxY = window.innerHeight - ORB_SIZE;
 
@@ -143,7 +136,6 @@ export const FloatingOrb = ({ onClick, isExpanded }: FloatingOrbProps) => {
     if (!isDragging) return;
     setIsDragging(false);
 
-    // Snap to nearest edge
     setPosition((prev) => {
       const snapped = snapToEdge(prev);
       savePosition(snapped);
@@ -151,7 +143,6 @@ export const FloatingOrb = ({ onClick, isExpanded }: FloatingOrbProps) => {
     });
   }, [isDragging]);
 
-  // Mouse events
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     handleDragStart(e.clientX, e.clientY);
@@ -172,7 +163,6 @@ export const FloatingOrb = ({ onClick, isExpanded }: FloatingOrbProps) => {
     };
   }, [isDragging, handleDragMove, handleDragEnd]);
 
-  // Touch events
   const handleTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0];
     handleDragStart(touch.clientX, touch.clientY);
@@ -180,7 +170,7 @@ export const FloatingOrb = ({ onClick, isExpanded }: FloatingOrbProps) => {
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (isDragging) {
-      e.preventDefault(); // Prevent scrolling while dragging
+      e.preventDefault();
       const touch = e.touches[0];
       handleDragMove(touch.clientX, touch.clientY);
     }
@@ -191,7 +181,6 @@ export const FloatingOrb = ({ onClick, isExpanded }: FloatingOrbProps) => {
   };
 
   const handleClick = () => {
-    // Only trigger click if we haven't dragged
     if (!hasMoved.current) {
       onClick();
     }
