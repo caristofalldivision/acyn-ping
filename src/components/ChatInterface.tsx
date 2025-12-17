@@ -1,13 +1,16 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense, lazy } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Bot, User, ArrowDown, Mic, Sparkles, Paperclip, FileText, Lightbulb, Briefcase } from "lucide-react";
+import { Send, Bot, User, ArrowDown, Sparkles, Paperclip, FileText, Lightbulb, Briefcase } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { DownloadButton } from "./DownloadButton";
 import { VoiceOrb } from "./VoiceOrb";
+
+// Lazy load the KineticCore for better performance
+const KineticCore = lazy(() => import("./KineticCore").then(m => ({ default: m.KineticCore })));
 
 interface Message {
   role: "user" | "assistant";
@@ -222,8 +225,10 @@ export const ChatInterface = ({
       >
         {showEmptyState ? (
           <div className="h-full flex flex-col items-center justify-center max-w-2xl mx-auto">
-            {/* Voice Orb */}
-            <VoiceOrb isListening={isListening} onMicClick={handleMicClick} size="lg" />
+            {/* 3D Kinetic Core Orb with WebGL fallback */}
+            <Suspense fallback={<VoiceOrb isListening={isListening} onMicClick={handleMicClick} size="lg" />}>
+              <KineticCore isListening={isListening} onMicClick={handleMicClick} size="lg" />
+            </Suspense>
             
             {/* Greeting */}
             <div className="mt-12 text-center">
