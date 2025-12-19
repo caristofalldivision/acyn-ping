@@ -24,6 +24,63 @@ export const useHandTracking = ({ enabled, onLandmarksUpdate }: UseHandTrackingO
     );
   }, []);
 
+  // Calculate palm normal from wrist and finger base landmarks
+  const calculatePalmNormal = useCallback((landmarks: THREE.Vector3[]): THREE.Vector3 => {
+    // Use wrist (0), index MCP (5), and pinky MCP (17) to form plane
+    const wrist = landmarks[0];
+    const indexMCP = landmarks[5];
+    const pinkyMCP = landmarks[17];
+    
+    if (!wrist || !indexMCP || !pinkyMCP) {
+      return new THREE.Vector3(0, 0, 1);
+    }
+
+    const v1 = new THREE.Vector3().subVectors(indexMCP, wrist);
+    const v2 = new THREE.Vector3().subVectors(pinkyMCP, wrist);
+    const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
+    
+    return normal;
+  }, []);
+
+  // Calculate hand rotation (roll angle)
+  const calculateHandRotation = useCallback((landmarks: THREE.Vector3[]): number => {
+    const wrist = landmarks[0];
+    const middleMCP = landmarks[9];
+    
+    if (!wrist || !middleMCP) return 0;
+    
+    const dx = middleMCP.x - wrist.x;
+    const dy = middleMCP.y - wrist.y;
+    
+    return Math.atan2(dx, dy);
+  }, []);
+
+  // Calculate finger spread (0-1 value)
+  const calculateFingerSpread = useCallback((landmarks: THREE.Vector3[]): number => {
+    // Measure distances between fingertips
+    const indexTip = landmarks[8];
+    const middleTip = landmarks[12];
+    const ringTip = landmarks[16];
+    const pinkyTip = landmarks[20];
+    const palmCenter = landmarks[9];
+    
+    if (!indexTip || !middleTip || !ringTip || !pinkyTip || !palmCenter) {
+      return 0;
+    }
+
+    // Calculate average spread between adjacent fingers
+    const indexMiddleDist = indexTip.distanceTo(middleTip);
+    const middleRingDist = middleTip.distanceTo(ringTip);
+    const ringPinkyDist = ringTip.distanceTo(pinkyTip);
+    
+    const avgSpread = (indexMiddleDist + middleRingDist + ringPinkyDist) / 3;
+    
+    // Normalize to 0-1 range (0.1 = closed, 0.5 = wide spread)
+    const normalized = Math.min(1, Math.max(0, (avgSpread - 0.1) / 0.4));
+    
+    return normalized;
+  }, []);
+
   const processLandmarks = useCallback((results: HandLandmarkerResult) => {
     if (results.landmarks && results.landmarks.length > 0) {
       const landmarks = results.landmarks[0];
@@ -36,6 +93,9 @@ export const useHandTracking = ({ enabled, onLandmarksUpdate }: UseHandTrackingO
         indexFingerTip: mapToWorldCoords(landmarks[8].x, landmarks[8].y, landmarks[8].z),
         thumbTip: mapToWorldCoords(landmarks[4].x, landmarks[4].y, landmarks[4].z),
         palmCenter: mapToWorldCoords(landmarks[9].x, landmarks[9].y, landmarks[9].z),
+        palmNormal: calculatePalmNormal(allLandmarks),
+        handRotation: calculateHandRotation(allLandmarks),
+        fingerSpread: calculateFingerSpread(allLandmarks),
         allLandmarks
       };
 
@@ -43,7 +103,7 @@ export const useHandTracking = ({ enabled, onLandmarksUpdate }: UseHandTrackingO
     } else {
       onLandmarksUpdate(null);
     }
-  }, [mapToWorldCoords, onLandmarksUpdate]);
+  }, [mapToWorldCoords, calculatePalmNormal, calculateHandRotation, calculateFingerSpread, onLandmarksUpdate]);
 
   const detectHands = useCallback(() => {
     if (!handLandmarkerRef.current || !videoRef.current || !enabled) {
