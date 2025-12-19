@@ -10,6 +10,23 @@ import { ParticleSwarm } from './ParticleSwarm';
 import { TrailRenderer } from './TrailRenderer';
 import { KineticCoreProps, HandLandmarks, GestureType, TrailPoint } from './types';
 
+// Gesture display names
+const GESTURE_DISPLAY: Record<GestureType, string> = {
+  idle: '',
+  pinch: '🤏 Pinch → Cube',
+  palm: '🖐️ Palm → Expand',
+  point: '👆 Point → Spiral',
+  fist: '✊ Fist → Implode',
+  peace: '✌️ Peace → Helix',
+  thumbUp: '👍 Thumb Up → Rise',
+  palmDown: '🫳 Palm Down → Disc',
+  spread: '🖐️ Spread → Explode',
+  grab: '🫴 Grab → Pull',
+  wave: '👋 Wave → Ripple',
+  gun: '🔫 Gun → Beam',
+  rock: '🤘 Rock → Chaos'
+};
+
 // Fallback component while loading
 const LoadingFallback = () => (
   <mesh>
@@ -168,8 +185,13 @@ export const KineticCore = ({
             {isListening ? 'Listening...' : 'Tap to speak'}
           </p>
           {gesture !== 'idle' && (
-            <p className="text-xs text-primary/70 mt-1 capitalize">
-              {gesture} detected
+            <p className="text-xs text-primary/80 mt-1 font-medium animate-pulse">
+              {GESTURE_DISPLAY[gesture]}
+            </p>
+          )}
+          {gesture === 'idle' && handLandmarks && (
+            <p className="text-xs text-muted-foreground/60 mt-1">
+              Hand detected - try a gesture!
             </p>
           )}
         </div>
