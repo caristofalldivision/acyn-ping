@@ -1,32 +1,46 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { FilesetResolver, HandLandmarker, HandLandmarkerResult } from '@mediapipe/tasks-vision';
 import * as THREE from 'three';
-import { HandLandmarks } from '../types';
+import { HandLandmarks, DualHandLandmarks } from '../types';
 
 interface UseHandTrackingOptions {
   enabled: boolean;
   onLandmarksUpdate: (landmarks: HandLandmarks | null) => void;
+  onDualHandUpdate: (dual: DualHandLandmarks | null) => void;
 }
 
-export const useHandTracking = ({ enabled, onLandmarksUpdate }: UseHandTrackingOptions) => {
+// Detect mobile device
+const isMobileDevice = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    window.matchMedia('(max-width: 768px)').matches;
+};
+
+export const useHandTracking = ({ enabled, onLandmarksUpdate, onDualHandUpdate }: UseHandTrackingOptions) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [hasPermission, setHasPermission] = useState(false);
   const handLandmarkerRef = useRef<HandLandmarker | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const animationFrameRef = useRef<number>();
+  const lastPositionsRef = useRef<Map<string, THREE.Vector3>>(new Map());
+  const lastFrameTimeRef = useRef(0);
+  const isMobile = useMemo(() => isMobileDevice(), []);
+  
+  // Frame rate control for mobile
+  const targetFps = isMobile ? 24 : 60;
+  const frameInterval = 1000 / targetFps;
 
   // Convert 2D normalized MediaPipe coords to 3D world space
   const mapToWorldCoords = useCallback((x: number, y: number, z: number): THREE.Vector3 => {
     return new THREE.Vector3(
-      (x - 0.5) * 4,    // Map [0,1] to [-2, 2]
-      -(y - 0.5) * 4,   // Invert Y axis
-      z * -4            // Depth mapping
+      (x - 0.5) * 4,
+      -(y - 0.5) * 4,
+      z * -4
     );
   }, []);
 
   // Calculate palm normal from wrist and finger base landmarks
   const calculatePalmNormal = useCallback((landmarks: THREE.Vector3[]): THREE.Vector3 => {
-    // Use wrist (0), index MCP (5), and pinky MCP (17) to form plane
     const wrist = landmarks[0];
     const indexMCP = landmarks[5];
     const pinkyMCP = landmarks[17];
@@ -57,7 +71,6 @@ export const useHandTracking = ({ enabled, onLandmarksUpdate }: UseHandTrackingO
 
   // Calculate finger spread (0-1 value)
   const calculateFingerSpread = useCallback((landmarks: THREE.Vector3[]): number => {
-    // Measure distances between fingertips
     const indexTip = landmarks[8];
     const middleTip = landmarks[12];
     const ringTip = landmarks[16];
@@ -68,42 +81,102 @@ export const useHandTracking = ({ enabled, onLandmarksUpdate }: UseHandTrackingO
       return 0;
     }
 
-    // Calculate average spread between adjacent fingers
     const indexMiddleDist = indexTip.distanceTo(middleTip);
     const middleRingDist = middleTip.distanceTo(ringTip);
     const ringPinkyDist = ringTip.distanceTo(pinkyTip);
     
     const avgSpread = (indexMiddleDist + middleRingDist + ringPinkyDist) / 3;
-    
-    // Normalize to 0-1 range (0.1 = closed, 0.5 = wide spread)
     const normalized = Math.min(1, Math.max(0, (avgSpread - 0.1) / 0.4));
     
     return normalized;
   }, []);
 
+  // Calculate velocity from previous position
+  const calculateVelocity = useCallback((handId: string, currentPos: THREE.Vector3): THREE.Vector3 => {
+    const lastPos = lastPositionsRef.current.get(handId);
+    if (!lastPos) {
+      lastPositionsRef.current.set(handId, currentPos.clone());
+      return new THREE.Vector3(0, 0, 0);
+    }
+    
+    const velocity = new THREE.Vector3().subVectors(currentPos, lastPos);
+    lastPositionsRef.current.set(handId, currentPos.clone());
+    return velocity;
+  }, []);
+
   const processLandmarks = useCallback((results: HandLandmarkerResult) => {
-    if (results.landmarks && results.landmarks.length > 0) {
-      const landmarks = results.landmarks[0];
+    if (!results.landmarks || results.landmarks.length === 0) {
+      onLandmarksUpdate(null);
+      onDualHandUpdate(null);
+      return;
+    }
+
+    const processedHands: HandLandmarks[] = [];
+
+    for (let i = 0; i < results.landmarks.length; i++) {
+      const landmarks = results.landmarks[i];
+      const handedness = results.handednesses[i]?.[0]?.categoryName as 'Left' | 'Right' || 'Right';
       
       const allLandmarks = landmarks.map(lm => 
         mapToWorldCoords(lm.x, lm.y, lm.z)
       );
 
+      const palmCenter = mapToWorldCoords(landmarks[9].x, landmarks[9].y, landmarks[9].z);
+      const handId = `hand_${i}`;
+
       const handData: HandLandmarks = {
         indexFingerTip: mapToWorldCoords(landmarks[8].x, landmarks[8].y, landmarks[8].z),
         thumbTip: mapToWorldCoords(landmarks[4].x, landmarks[4].y, landmarks[4].z),
-        palmCenter: mapToWorldCoords(landmarks[9].x, landmarks[9].y, landmarks[9].z),
+        palmCenter,
         palmNormal: calculatePalmNormal(allLandmarks),
         handRotation: calculateHandRotation(allLandmarks),
         fingerSpread: calculateFingerSpread(allLandmarks),
-        allLandmarks
+        allLandmarks,
+        handedness,
+        velocity: calculateVelocity(handId, palmCenter)
       };
 
-      onLandmarksUpdate(handData);
-    } else {
-      onLandmarksUpdate(null);
+      processedHands.push(handData);
     }
-  }, [mapToWorldCoords, calculatePalmNormal, calculateHandRotation, calculateFingerSpread, onLandmarksUpdate]);
+
+    // Update primary hand (first detected)
+    onLandmarksUpdate(processedHands[0] || null);
+
+    // Process two-hand data if available
+    if (processedHands.length >= 2) {
+      const leftHand = processedHands.find(h => h.handedness === 'Left') || processedHands[0];
+      const rightHand = processedHands.find(h => h.handedness === 'Right') || processedHands[1];
+      
+      const interHandDistance = leftHand.palmCenter.distanceTo(rightHand.palmCenter);
+      const centerPoint = new THREE.Vector3().lerpVectors(
+        leftHand.palmCenter, 
+        rightHand.palmCenter, 
+        0.5
+      );
+
+      // Detect approaching/separating
+      const combinedVelocity = new THREE.Vector3().addVectors(
+        leftHand.velocity, 
+        rightHand.velocity
+      );
+      const dotProduct = leftHand.velocity.dot(
+        new THREE.Vector3().subVectors(rightHand.palmCenter, leftHand.palmCenter).normalize()
+      );
+
+      const dualData: DualHandLandmarks = {
+        leftHand,
+        rightHand,
+        interHandDistance,
+        centerPoint,
+        isApproaching: dotProduct > 0.02,
+        isSeparating: dotProduct < -0.02
+      };
+
+      onDualHandUpdate(dualData);
+    } else {
+      onDualHandUpdate(null);
+    }
+  }, [mapToWorldCoords, calculatePalmNormal, calculateHandRotation, calculateFingerSpread, calculateVelocity, onLandmarksUpdate, onDualHandUpdate]);
 
   const detectHands = useCallback(() => {
     if (!handLandmarkerRef.current || !videoRef.current || !enabled) {
@@ -111,11 +184,19 @@ export const useHandTracking = ({ enabled, onLandmarksUpdate }: UseHandTrackingO
       return;
     }
 
+    const now = performance.now();
+    
+    // Frame rate limiting for mobile
+    if (now - lastFrameTimeRef.current < frameInterval) {
+      animationFrameRef.current = requestAnimationFrame(detectHands);
+      return;
+    }
+    lastFrameTimeRef.current = now;
+
     const video = videoRef.current;
     if (video.readyState >= 2) {
-      const startTimeMs = performance.now();
       try {
-        const results = handLandmarkerRef.current.detectForVideo(video, startTimeMs);
+        const results = handLandmarkerRef.current.detectForVideo(video, now);
         processLandmarks(results);
       } catch (error) {
         console.error('Hand detection error:', error);
@@ -123,7 +204,7 @@ export const useHandTracking = ({ enabled, onLandmarksUpdate }: UseHandTrackingO
     }
 
     animationFrameRef.current = requestAnimationFrame(detectHands);
-  }, [enabled, processLandmarks]);
+  }, [enabled, processLandmarks, frameInterval]);
 
   const initializeHandLandmarker = useCallback(async () => {
     try {
@@ -137,10 +218,10 @@ export const useHandTracking = ({ enabled, onLandmarksUpdate }: UseHandTrackingO
           delegate: 'GPU'
         },
         runningMode: 'VIDEO',
-        numHands: 1,
-        minHandDetectionConfidence: 0.5,
-        minHandPresenceConfidence: 0.5,
-        minTrackingConfidence: 0.5
+        numHands: 2, // Enable two-hand tracking
+        minHandDetectionConfidence: isMobile ? 0.6 : 0.5,
+        minHandPresenceConfidence: isMobile ? 0.6 : 0.5,
+        minTrackingConfidence: isMobile ? 0.6 : 0.5
       });
 
       handLandmarkerRef.current = handLandmarker;
@@ -148,16 +229,17 @@ export const useHandTracking = ({ enabled, onLandmarksUpdate }: UseHandTrackingO
     } catch (error) {
       console.error('Failed to initialize HandLandmarker:', error);
     }
-  }, []);
+  }, [isMobile]);
 
   const startCamera = useCallback(async () => {
     try {
+      // Lower resolution for mobile
+      const videoConstraints = isMobile 
+        ? { width: 480, height: 360, facingMode: 'user' }
+        : { width: 640, height: 480, facingMode: 'user' };
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          width: 640, 
-          height: 480,
-          facingMode: 'user'
-        }
+        video: videoConstraints
       });
 
       const video = document.createElement('video');
@@ -170,13 +252,12 @@ export const useHandTracking = ({ enabled, onLandmarksUpdate }: UseHandTrackingO
       videoRef.current = video;
       setHasPermission(true);
 
-      // Start detection loop
       detectHands();
     } catch (error) {
       console.error('Camera access denied:', error);
       setHasPermission(false);
     }
-  }, [detectHands]);
+  }, [detectHands, isMobile]);
 
   useEffect(() => {
     if (enabled && !isInitialized) {
@@ -204,6 +285,7 @@ export const useHandTracking = ({ enabled, onLandmarksUpdate }: UseHandTrackingO
 
   return {
     isInitialized,
-    hasPermission
+    hasPermission,
+    isMobile
   };
 };
