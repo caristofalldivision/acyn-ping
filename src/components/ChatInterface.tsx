@@ -27,22 +27,22 @@ interface ChatInterfaceProps {
 const quickActions = [
   { 
     icon: FileText, 
-    title: "Content Help", 
-    subtitle: "Help with me create a Presentation",
+    title: "Create Content", 
+    subtitle: "Help me create a presentation",
     colorClass: "action-card-teal",
     iconColor: "text-action-teal"
   },
   { 
     icon: Lightbulb, 
-    title: "Suggestions", 
-    subtitle: "Help with me Ideas",
+    title: "Brainstorm", 
+    subtitle: "Help me with creative ideas",
     colorClass: "action-card-green",
     iconColor: "text-action-green"
   },
   { 
     icon: Briefcase, 
-    title: "Job Application", 
-    subtitle: "Help with me apply for job application",
+    title: "Career Help", 
+    subtitle: "Help me with job applications",
     colorClass: "action-card-peach",
     iconColor: "text-action-peach"
   },
@@ -224,31 +224,44 @@ export const ChatInterface = ({
         className="flex-1 overflow-y-auto px-4 py-6"
       >
         {showEmptyState ? (
-          <div className="h-full flex flex-col items-center justify-center max-w-2xl mx-auto">
-            {/* 3D Kinetic Core Orb with WebGL fallback */}
-            <Suspense fallback={<VoiceOrb isListening={isListening} onMicClick={handleMicClick} size="lg" />}>
-              <KineticCore isListening={isListening} onMicClick={handleMicClick} size="lg" />
-            </Suspense>
+          <div className="h-full flex flex-col items-center justify-center max-w-3xl mx-auto px-4">
+            {/* Orbital rings around orb */}
+            <div className="relative">
+              <div className="absolute inset-0 w-80 h-80 -translate-x-1/2 -translate-y-1/2 left-1/2 top-1/2 rounded-full border border-primary/10 animate-spin-slow" />
+              <div className="absolute inset-0 w-96 h-96 -translate-x-1/2 -translate-y-1/2 left-1/2 top-1/2 rounded-full border border-accent/5 animate-spin-slower" />
+              
+              {/* 3D Kinetic Core Orb */}
+              <Suspense fallback={<VoiceOrb isListening={isListening} onMicClick={handleMicClick} size="lg" />}>
+                <KineticCore isListening={isListening} onMicClick={handleMicClick} size="lg" />
+              </Suspense>
+            </div>
             
             {/* Greeting */}
-            <div className="mt-12 text-center">
-              <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
-                Hey! <span className="text-primary">{userName}</span>
+            <div className="mt-10 text-center relative z-10">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-3">
+                <span className="bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
+                  Cosmic AI
+                </span>
               </h1>
-              <p className="text-xl text-muted-foreground">What can I help with?</p>
+              <p className="text-xl sm:text-2xl text-muted-foreground">
+                Hey, <span className="text-primary font-semibold">{userName}</span>!
+              </p>
+              <p className="text-base sm:text-lg text-muted-foreground/70 mt-2">
+                Use hand gestures to command the AI Core
+              </p>
             </div>
             
             {/* Quick Actions */}
-            <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-xl">
+            <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-2xl relative z-10">
               {quickActions.map((action) => (
                 <button
                   key={action.title}
                   onClick={() => handleQuickAction(action)}
-                  className={`action-card ${action.colorClass} text-left`}
+                  className={`action-card ${action.colorClass} text-left group`}
                 >
-                  <action.icon className={`w-6 h-6 ${action.iconColor} mb-3`} />
-                  <h3 className="font-medium text-foreground mb-1">{action.title}</h3>
-                  <p className="text-xs text-muted-foreground">{action.subtitle}</p>
+                  <action.icon className={`w-7 h-7 ${action.iconColor} mb-3 group-hover:scale-110 transition-transform`} />
+                  <h3 className="font-semibold text-foreground mb-1 text-base">{action.title}</h3>
+                  <p className="text-xs text-muted-foreground/80">{action.subtitle}</p>
                 </button>
               ))}
             </div>
@@ -262,15 +275,15 @@ export const ChatInterface = ({
               >
                 {msg.role === "assistant" && (
                   <div className="flex-shrink-0">
-                    <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/30 to-accent/20 flex items-center justify-center ring-1 ring-primary/20">
                       <Bot className="w-4 h-4 text-primary" />
                     </div>
                   </div>
                 )}
-                <div className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-4 py-3 ${
+                <div className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-5 py-4 ${
                   msg.role === "user" 
-                    ? "bg-primary text-primary-foreground" 
-                    : "bg-card border border-border"
+                    ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20" 
+                    : "glass-card-strong"
                 }`}>
                   {msg.role === "assistant" ? (
                     <>
@@ -280,7 +293,7 @@ export const ChatInterface = ({
                         </ReactMarkdown>
                       </div>
                       {detectDownloadableContent(msg.content) && (
-                        <div className="mt-3 pt-3 border-t border-border">
+                        <div className="mt-3 pt-3 border-t border-border/30">
                           <DownloadButton 
                             content={msg.content} 
                             filename={detectDownloadableContent(msg.content)!.filename} 
@@ -295,7 +308,7 @@ export const ChatInterface = ({
                 </div>
                 {msg.role === "user" && (
                   <div className="flex-shrink-0">
-                    <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
+                    <div className="w-9 h-9 rounded-xl bg-secondary/80 flex items-center justify-center ring-1 ring-border/30">
                       <User className="w-4 h-4 text-foreground" />
                     </div>
                   </div>
@@ -306,15 +319,15 @@ export const ChatInterface = ({
             {loading && (
               <div className="flex gap-3 justify-start fade-in">
                 <div className="flex-shrink-0">
-                  <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
-                    <Bot className="w-4 h-4 text-primary" />
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/30 to-accent/20 flex items-center justify-center">
+                    <Bot className="w-4 h-4 text-primary animate-pulse" />
                   </div>
                 </div>
-                <div className="bg-card border border-border rounded-2xl px-4 py-3">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                <div className="glass-card-strong rounded-2xl px-5 py-4">
+                  <div className="flex gap-1.5">
+                    <div className="w-2 h-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <div className="w-2 h-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <div className="w-2 h-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
                 </div>
               </div>
@@ -329,7 +342,7 @@ export const ChatInterface = ({
           <Button 
             onClick={scrollToBottom} 
             size="icon" 
-            className="fixed bottom-28 right-6 rounded-full shadow-lg bg-card border border-border hover:bg-secondary z-10" 
+            className="fixed bottom-28 right-6 rounded-full shadow-lg glass-card-strong hover:bg-primary/20 z-20" 
             variant="ghost"
           >
             <ArrowDown className="w-5 h-5" />
@@ -340,13 +353,7 @@ export const ChatInterface = ({
       {/* Input area */}
       <div className="flex-shrink-0 p-4 pb-6">
         <div className="max-w-3xl mx-auto">
-          <div 
-            className="flex items-center gap-3 rounded-2xl px-4 py-3"
-            style={{
-              background: "hsl(var(--card) / 0.8)",
-              border: "1px solid hsl(var(--border) / 0.5)",
-            }}
-          >
+          <div className="flex items-center gap-3 rounded-2xl px-4 py-3 glass-card-strong">
             <Sparkles className="w-5 h-5 text-primary flex-shrink-0" />
             <Input 
               value={input} 
@@ -354,12 +361,12 @@ export const ChatInterface = ({
               onKeyPress={e => e.key === "Enter" && !loading && sendMessage()} 
               placeholder="Ask me anything..." 
               disabled={loading} 
-              className="flex-1 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 px-0 text-base placeholder:text-muted-foreground" 
+              className="flex-1 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 px-0 text-base placeholder:text-muted-foreground/60" 
             />
             <Button 
               variant="ghost" 
               size="icon" 
-              className="rounded-full flex-shrink-0 hover:bg-secondary h-9 w-9"
+              className="rounded-full flex-shrink-0 hover:bg-primary/10 h-9 w-9"
             >
               <Paperclip className="w-5 h-5 text-muted-foreground" />
             </Button>
@@ -367,7 +374,7 @@ export const ChatInterface = ({
               onClick={() => sendMessage()} 
               disabled={loading || !input.trim()} 
               size="icon"
-              className="rounded-full h-9 w-9 bg-primary hover:bg-primary/90 flex-shrink-0"
+              className="rounded-full h-10 w-10 cosmic-button flex-shrink-0"
             >
               <Send className="w-4 h-4" />
             </Button>

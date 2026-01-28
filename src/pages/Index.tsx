@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { Auth } from "@/components/Auth";
 import { ChatInterface } from "@/components/ChatInterface";
 import { ConversationList } from "@/components/ConversationList";
@@ -10,6 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Brain, Menu, LogOut } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
+// Lazy load cosmic background components
+const Starfield = lazy(() => import("@/components/Starfield"));
+const NebulaBackground = lazy(() => import("@/components/NebulaBackground"));
+const FloatingParticles = lazy(() => import("@/components/FloatingParticles"));
 
 const Index = () => {
   const [session, setSession] = useState<Session | null>(null);
@@ -42,7 +47,6 @@ const Index = () => {
   }, []);
 
   const extractUserName = async (session: Session) => {
-    // Try to get name from user metadata or email
     const email = session.user.email;
     const metadata = session.user.user_metadata;
     
@@ -54,7 +58,6 @@ const Index = () => {
       setUserName(email.split("@")[0]);
     }
 
-    // Also check learned knowledge for user's name
     const { data } = await supabase
       .from("learned_knowledge")
       .select("value")
@@ -119,10 +122,17 @@ const Index = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-background">
-        <div className="text-center space-y-4">
-          <Brain className="w-12 h-12 mx-auto animate-pulse text-primary" />
-          <p className="text-muted-foreground">Loading...</p>
+      <div className="flex items-center justify-center h-screen cosmic-bg">
+        <Suspense fallback={null}>
+          <Starfield />
+          <NebulaBackground />
+        </Suspense>
+        <div className="text-center space-y-4 relative z-10">
+          <div className="relative">
+            <Brain className="w-16 h-16 mx-auto text-primary animate-pulse" />
+            <div className="absolute inset-0 w-16 h-16 mx-auto rounded-full bg-primary/20 animate-ping" />
+          </div>
+          <p className="text-muted-foreground text-lg">Initializing...</p>
         </div>
       </div>
     );
@@ -133,9 +143,17 @@ const Index = () => {
   }
 
   return (
-    <div className="h-screen flex bg-background overflow-hidden">
+    <div className="h-screen flex overflow-hidden relative">
+      {/* Cosmic background layers */}
+      <div className="absolute inset-0 cosmic-bg" />
+      <Suspense fallback={null}>
+        <Starfield />
+        <NebulaBackground />
+        <FloatingParticles />
+      </Suspense>
+
       {/* Icon Sidebar - Desktop */}
-      <aside className="hidden lg:flex flex-shrink-0">
+      <aside className="hidden lg:flex flex-shrink-0 relative z-20">
         <IconSidebar 
           onNewConversation={handleNewConversation}
           onShowConversations={() => setShowConversations(!showConversations)}
@@ -144,7 +162,7 @@ const Index = () => {
 
       {/* Conversations Panel - Desktop */}
       {showConversations && (
-        <aside className="hidden lg:flex w-64 border-r border-border bg-sidebar-background flex-shrink-0 overflow-hidden">
+        <aside className="hidden lg:flex w-64 border-r border-border/30 glass-card flex-shrink-0 overflow-hidden relative z-20">
           <ConversationList
             activeConversationId={activeConversationId}
             onConversationSelect={(id) => {
@@ -156,20 +174,20 @@ const Index = () => {
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
         {/* Header */}
-        <header className="flex-shrink-0 h-14 px-4 flex items-center justify-between border-b border-border/30">
+        <header className="flex-shrink-0 h-14 px-4 flex items-center justify-between border-b border-border/20 backdrop-blur-xl bg-background/40">
           <div className="flex items-center gap-3">
             {/* Mobile menu */}
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild className="lg:hidden">
-                <Button variant="ghost" size="icon" className="rounded-xl">
+                <Button variant="ghost" size="icon" className="rounded-xl hover:bg-primary/10">
                   <Menu className="w-5 h-5" />
                 </Button>
               </SheetTrigger>
               <SheetContent 
                 side="left" 
-                className="p-0 w-[85vw] max-w-72 bg-sidebar-background border-border"
+                className="p-0 w-[85vw] max-w-72 glass-card border-border/30"
               >
                 <ConversationList
                   activeConversationId={activeConversationId}
@@ -183,10 +201,12 @@ const Index = () => {
             </Sheet>
 
             <div className="flex items-center gap-3 lg:hidden">
-              <div className="w-8 h-8 rounded-xl bg-primary/20 flex items-center justify-center">
-                <Brain className="w-4 h-4 text-primary" />
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/30 to-accent/20 flex items-center justify-center animate-glow-pulse">
+                <Brain className="w-5 h-5 text-primary" />
               </div>
-              <h1 className="text-lg font-semibold text-foreground">Topha</h1>
+              <h1 className="text-lg font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
+                Topha
+              </h1>
             </div>
           </div>
 
@@ -196,20 +216,20 @@ const Index = () => {
               onClick={handleSignOut}
               variant="ghost"
               size="icon"
-              className="rounded-xl hover:bg-secondary"
+              className="rounded-xl hover:bg-destructive/10 hover:text-destructive"
             >
               <LogOut className="w-4 h-4" />
             </Button>
-            <Avatar className="w-8 h-8">
-              <AvatarFallback className="bg-primary/20 text-primary text-sm">
+            <Avatar className="w-9 h-9 ring-2 ring-primary/20">
+              <AvatarFallback className="bg-gradient-to-br from-primary/30 to-accent/20 text-primary text-sm font-medium">
                 {userName.charAt(0).toUpperCase()}
               </AvatarFallback>
             </Avatar>
           </div>
         </header>
 
-        {/* Chat area with grid background */}
-        <main className="flex-1 min-w-0 overflow-hidden grid-background">
+        {/* Chat area */}
+        <main className="flex-1 min-w-0 overflow-hidden">
           <ChatInterface
             conversationId={activeConversationId}
             userKnowledge={userKnowledge}
