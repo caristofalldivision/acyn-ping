@@ -152,6 +152,7 @@ export const KineticCore = ({
   const [gesture, setGesture] = useState<GestureType>('idle');
   const [trailPoints, setTrailPoints] = useState<TrailPoint[]>([]);
   const [handTrackingEnabled] = useState(true);
+  const [showDebug] = useState(false); // Set to true for debugging
   
   const isMobile = useMemo(() => isMobileDevice(), []);
   const detectGesture = useGestureFromLandmarks();
@@ -197,7 +198,7 @@ export const KineticCore = ({
   const sizeClasses = {
     sm: 'w-32 h-32',
     md: 'w-48 h-48',
-    lg: 'w-72 h-72 md:w-96 md:h-96'
+    lg: 'w-64 h-64 xs:w-72 xs:h-72 sm:w-80 sm:h-80 md:w-96 md:h-96'
   };
 
   // Count hands detected
@@ -212,6 +213,20 @@ export const KineticCore = ({
         onGestureDetected={handleGestureDetected}
         enabled={handTrackingEnabled}
       />
+
+      {/* Debug overlay - enable showDebug for testing */}
+      {showDebug && handLandmarks && (
+        <div className="fixed top-4 left-4 bg-black/90 text-white p-4 rounded-xl text-xs font-mono z-50 max-w-xs backdrop-blur-xl border border-primary/30">
+          <div className="text-primary font-bold mb-2">🎯 Gesture Debug</div>
+          <div>Gesture: <span className="text-primary">{gesture}</span></div>
+          <div>Hands: <span className="text-accent">{handsDetected}</span></div>
+          <div>Finger Spread: {handLandmarks.fingerSpread.toFixed(2)}</div>
+          <div>Velocity: {handLandmarks.velocity.length().toFixed(3)}</div>
+          <div className="mt-2 text-muted-foreground">
+            Palm Normal: ({handLandmarks.palmNormal.x.toFixed(2)}, {handLandmarks.palmNormal.y.toFixed(2)}, {handLandmarks.palmNormal.z.toFixed(2)})
+          </div>
+        </div>
+      )}
 
       <div 
         className={`${sizeClasses[size]} cursor-pointer`}
@@ -239,21 +254,25 @@ export const KineticCore = ({
       </div>
 
       {size === 'lg' && (
-        <div className="mt-8 text-center">
+        <div className="mt-6 text-center">
           <p className="text-sm text-muted-foreground">
-            {isListening ? 'Listening...' : 'Tap to speak'}
+            {isListening ? (
+              <span className="text-primary animate-pulse">● Listening...</span>
+            ) : (
+              'Tap to speak'
+            )}
           </p>
           
           {/* Hand count indicator */}
           {handsDetected > 0 && (
-            <p className="text-xs text-muted-foreground/60 mt-1">
-              {handsDetected === 2 ? '✋✋ Two hands detected' : '✋ One hand detected'}
+            <p className="text-xs text-muted-foreground/70 mt-1">
+              {handsDetected === 2 ? '✋✋ Two hands' : '✋ One hand'}
             </p>
           )}
           
           {/* Gesture display */}
           {gesture !== 'idle' && (
-            <p className={`text-xs mt-1 font-medium animate-pulse ${isTwoHandGesture ? 'text-accent' : 'text-primary/80'}`}>
+            <p className={`text-sm mt-2 font-medium ${isTwoHandGesture ? 'text-accent' : 'text-primary'}`}>
               {GESTURE_DISPLAY[gesture]}
             </p>
           )}

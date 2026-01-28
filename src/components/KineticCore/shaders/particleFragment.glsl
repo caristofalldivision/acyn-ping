@@ -11,21 +11,31 @@ varying float vRandomness;
 varying float vGestureIntensity;
 varying float vTwoHandBlend;
 
+// Cosmic color palette
+vec3 colorDeepSpace = vec3(0.05, 0.05, 0.2);
+vec3 colorNebulaPurple = vec3(0.6, 0.2, 0.9);
+vec3 colorStarWhite = vec3(1.0, 0.95, 0.9);
+vec3 colorCyan = vec3(0.0, 0.85, 1.0);
+vec3 colorMagenta = vec3(1.0, 0.1, 0.6);
+vec3 colorGold = vec3(1.0, 0.85, 0.3);
+vec3 colorFire = vec3(1.0, 0.4, 0.1);
+vec3 colorIce = vec3(0.4, 0.8, 1.0);
+
 void main() {
   vec2 center = gl_PointCoord - vec2(0.5);
   float dist = length(center);
   
   if (dist > 0.5) discard;
   
-  // Base color mixing
+  // Base color mixing with cosmic tones
   float colorMix = vPulse * 0.6 + vRandomness * 0.4;
   vec3 color = mix(uColorCore, uColorAccent, colorMix);
   
   // ============ SINGLE-HAND GESTURE COLORS ============
   
-  // FIST (4) - Red/orange
+  // FIST (4) - Red/orange fire
   if (uGestureState > 3.5 && uGestureState < 4.5) {
-    color = mix(color, vec3(1.0, 0.3, 0.1), vGestureIntensity * 0.5);
+    color = mix(color, colorFire, vGestureIntensity * 0.6);
   }
   // SPREAD (8) - Golden
   else if (uGestureState > 7.5 && uGestureState < 8.5) {
@@ -52,10 +62,11 @@ void main() {
   else if (uGestureState > 6.5 && uGestureState < 7.5) {
     color = mix(color, vec3(0.3, 0.5, 1.0), vGestureIntensity * 0.4);
   }
-  // GALAXY (13) - Purple nebula
+  // GALAXY (13) - Cosmic nebula colors
   else if (uGestureState > 12.5 && uGestureState < 13.5) {
-    color = mix(color, vec3(0.6, 0.2, 0.9), vGestureIntensity * 0.6);
-    color += vec3(0.2, 0.1, 0.3) * vRandomness;
+    color = mix(colorNebulaPurple, colorCyan, vRandomness);
+    color += colorStarWhite * vGestureIntensity * 0.4;
+    color += vec3(0.3, 0.1, 0.4) * sin(vRandomness * 6.28 + uTime);
   }
   // VORTEX (14) - Green wind
   else if (uGestureState > 13.5 && uGestureState < 14.5) {
@@ -141,14 +152,18 @@ void main() {
     color += vec3(0.0, 0.6, 0.8) * listenGlow * 0.25;
   }
   
-  // Core brightness
+  // Core brightness - enhanced for cosmic glow
   float radialGradient = 1.0 - smoothstep(0.0, 0.5, dist);
-  float coreBrightness = smoothstep(0.4, 0.0, dist);
-  color += vec3(1.0) * coreBrightness * 0.35;
+  float coreBrightness = smoothstep(0.35, 0.0, dist);
+  color += colorStarWhite * coreBrightness * 0.5;
   
-  // Alpha
-  float alpha = radialGradient * (0.5 + vPulse * 0.5);
-  alpha *= 0.85 + vGestureIntensity * 0.15;
+  // Add subtle shimmer
+  float shimmer = sin(uTime * 8.0 + vRandomness * 20.0) * 0.5 + 0.5;
+  color += colorCyan * shimmer * 0.1 * vGestureIntensity;
+  
+  // Alpha with enhanced visibility
+  float alpha = radialGradient * (0.6 + vPulse * 0.4);
+  alpha *= 0.9 + vGestureIntensity * 0.1;
   
   gl_FragColor = vec4(color, alpha);
 }
