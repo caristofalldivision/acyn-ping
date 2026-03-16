@@ -3,14 +3,12 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { ParticleSwarmProps, getGestureState } from './types';
 
-// Import shaders as raw strings
 import vertexShader from './shaders/particleVertex.glsl?raw';
 import fragmentShader from './shaders/particleFragment.glsl?raw';
 
-// Adaptive particle count
 const getParticleCount = (isMobile: boolean): number => {
-  if (isMobile) return 3000;
-  return 6000;
+  if (isMobile) return 4000;
+  return 8000;
 };
 
 export const ParticleSwarm = ({ 
@@ -25,7 +23,6 @@ export const ParticleSwarm = ({
 
   const PARTICLE_COUNT = useMemo(() => getParticleCount(isMobile), [isMobile]);
 
-  // Generate particle attributes
   const { positions, randomness, phases, scales } = useMemo(() => {
     const positions = new Float32Array(PARTICLE_COUNT * 3);
     const randomness = new Float32Array(PARTICLE_COUNT);
@@ -35,21 +32,22 @@ export const ParticleSwarm = ({
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
-      const radius = 0.3 + Math.random() * 1.2;
+      // Wider spread: galaxy-like distribution
+      const radius = 0.3 + Math.pow(Math.random(), 0.6) * 2.5;
 
       positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
-      positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+      positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta) * 0.4; // Flatten for disc shape
       positions[i * 3 + 2] = radius * Math.cos(phi);
 
       randomness[i] = Math.random();
       phases[i] = Math.random() * Math.PI * 2;
-      scales[i] = 0.5 + Math.random() * 0.8;
+      // More size variation: tiny distant stars + some bright ones
+      scales[i] = 0.2 + Math.pow(Math.random(), 2.0) * 1.2;
     }
 
     return { positions, randomness, phases, scales };
   }, [PARTICLE_COUNT]);
 
-  // Animation loop
   useFrame((state) => {
     if (!materialRef.current) return;
 
@@ -60,14 +58,12 @@ export const ParticleSwarm = ({
     uniforms.uGestureState.value = getGestureState(gesture);
     uniforms.uListening.value = isListening ? 1.0 : 0.0;
 
-    // Primary hand
     if (handLandmarks) {
       uniforms.uAttractorPosition.value.copy(handLandmarks.indexFingerTip);
       uniforms.uFingerSpread.value = handLandmarks.fingerSpread;
       uniforms.uPalmNormal.value.copy(handLandmarks.palmNormal);
       uniforms.uGestureVelocity.value = handLandmarks.velocity.length();
     } else {
-      // Default attractor position
       const defaultPos = new THREE.Vector3(
         Math.sin(time * 0.5) * 0.5,
         Math.cos(time * 0.3) * 0.5,
@@ -76,7 +72,6 @@ export const ParticleSwarm = ({
       uniforms.uAttractorPosition.value.copy(defaultPos);
     }
 
-    // Two-hand data
     if (dualHands && dualHands.leftHand && dualHands.rightHand) {
       uniforms.uAttractorPosition2.value.copy(dualHands.rightHand.indexFingerTip);
       uniforms.uInterHandDistance.value = dualHands.interHandDistance;
