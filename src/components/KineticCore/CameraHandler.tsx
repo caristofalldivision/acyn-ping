@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useRef } from 'react';
 import { useHandTracking } from './hooks/useHandTracking';
 import { useGestureDetection } from './hooks/useGestureDetection';
 import { CameraHandlerProps, HandLandmarks, DualHandLandmarks } from './types';
@@ -10,14 +10,13 @@ export const CameraHandler = ({
   enabled 
 }: CameraHandlerProps) => {
   const { detectGesture } = useGestureDetection();
-  
-  let currentDualHands: DualHandLandmarks | null = null;
+  const currentDualHandsRef = useRef<DualHandLandmarks | null>(null);
 
   const handleLandmarksUpdate = (landmarks: HandLandmarks | null) => {
     onLandmarksUpdate(landmarks);
     
     if (landmarks) {
-      const gesture = detectGesture(landmarks, currentDualHands);
+      const gesture = detectGesture(landmarks, currentDualHandsRef.current);
       onGestureDetected(gesture);
     } else {
       onGestureDetected('idle');
@@ -25,21 +24,15 @@ export const CameraHandler = ({
   };
 
   const handleDualHandUpdate = (dual: DualHandLandmarks | null) => {
-    currentDualHands = dual;
+    currentDualHandsRef.current = dual;
     onDualHandUpdate(dual);
   };
 
-  useHandTracking({
+  const { isInitialized, hasPermission } = useHandTracking({
     enabled,
     onLandmarksUpdate: handleLandmarksUpdate,
     onDualHandUpdate: handleDualHandUpdate
   });
 
   return null;
-};
-
-// Export the gesture detection hook for use in parent components
-export const useGestureFromLandmarks = () => {
-  const { detectGesture } = useGestureDetection();
-  return detectGesture;
 };

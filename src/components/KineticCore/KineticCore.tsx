@@ -1,10 +1,10 @@
-import { useState, useCallback, Suspense, useMemo, useEffect } from 'react';
+import { useState, useCallback, Suspense, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment } from '@react-three/drei';
 import { EffectComposer, Bloom, ChromaticAberration } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
 import * as THREE from 'three';
-import { CameraHandler, useGestureFromLandmarks } from './CameraHandler';
+import { CameraHandler } from './CameraHandler';
 import { OrbCore } from './OrbCore';
 import { ParticleSwarm } from './ParticleSwarm';
 import { TrailRenderer } from './TrailRenderer';
@@ -13,14 +13,10 @@ import {
   HandLandmarks, 
   DualHandLandmarks,
   GestureType, 
-  TrailPoint,
-  SingleHandGestureType,
-  TwoHandGestureType
+  TrailPoint
 } from './types';
 
-// Gesture display names for all 34 gestures
 const GESTURE_DISPLAY: Record<GestureType, string> = {
-  // Single-hand (0-23)
   idle: '',
   pinch: '🤏 Pinch → Cube',
   palm: '🖐️ Palm → Cloud',
@@ -45,7 +41,6 @@ const GESTURE_DISPLAY: Record<GestureType, string> = {
   swirl: '🌀 Swirl → Gentle Spin',
   burst: '🎆 Burst → Firework',
   heartbeat: '💓 Heartbeat → Pulse',
-  // Two-hand (100-109)
   stretch: '↔️ Stretch → Elastic',
   compress: '🫂 Compress → Squeeze',
   clap: '👏 Clap → Shockwave',
@@ -58,7 +53,6 @@ const GESTURE_DISPLAY: Record<GestureType, string> = {
   sphere: '⚪ Sphere → Contain'
 };
 
-// Detect mobile
 const isMobileDevice = (): boolean => {
   if (typeof window === 'undefined') return false;
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
@@ -89,16 +83,9 @@ const Scene = ({
 }) => {
   return (
     <>
-      <ambientLight intensity={0.15} />
-      <pointLight position={[10, 10, 10]} intensity={0.4} color="#ffffff" />
-      <pointLight position={[-10, -10, -10]} intensity={0.2} color="#00d4ff" />
-      <spotLight
-        position={[0, 5, 5]}
-        angle={0.4}
-        penumbra={0.5}
-        intensity={0.5}
-        color="#00ffcc"
-      />
+      <ambientLight intensity={0.1} />
+      <pointLight position={[10, 10, 10]} intensity={0.3} color="#ffffff" />
+      <pointLight position={[-10, -10, -10]} intensity={0.15} color="#00d4ff" />
 
       <Environment preset="night" />
 
@@ -116,8 +103,8 @@ const Scene = ({
 
       <EffectComposer>
         <Bloom
-          intensity={isMobile ? 0.8 : 1.2}
-          luminanceThreshold={0.15}
+          intensity={isMobile ? 1.0 : 1.8}
+          luminanceThreshold={0.1}
           luminanceSmoothing={0.9}
           mipmapBlur
         />
@@ -125,7 +112,7 @@ const Scene = ({
           // @ts-ignore
           <ChromaticAberration
             blendFunction={BlendFunction.NORMAL}
-            offset={new THREE.Vector2(0.002, 0.002)}
+            offset={new THREE.Vector2(0.003, 0.003)}
           />
         )}
       </EffectComposer>
@@ -152,20 +139,8 @@ export const KineticCore = ({
   const [gesture, setGesture] = useState<GestureType>('idle');
   const [trailPoints, setTrailPoints] = useState<TrailPoint[]>([]);
   const [handTrackingEnabled] = useState(true);
-  const [showDebug] = useState(false); // Set to true for debugging
   
   const isMobile = useMemo(() => isMobileDevice(), []);
-  const detectGesture = useGestureFromLandmarks();
-
-  // Detect gesture when landmarks update
-  useEffect(() => {
-    if (handLandmarks) {
-      const detected = detectGesture(handLandmarks, dualHands);
-      setGesture(detected);
-    } else {
-      setGesture('idle');
-    }
-  }, [handLandmarks, dualHands, detectGesture]);
 
   const handleLandmarksUpdate = useCallback((landmarks: HandLandmarks | null) => {
     setHandLandmarks(landmarks);
@@ -201,7 +176,6 @@ export const KineticCore = ({
     lg: 'w-64 h-64 xs:w-72 xs:h-72 sm:w-80 sm:h-80 md:w-96 md:h-96'
   };
 
-  // Count hands detected
   const handsDetected = dualHands?.leftHand && dualHands?.rightHand ? 2 : handLandmarks ? 1 : 0;
   const isTwoHandGesture = gesture in { stretch: 1, compress: 1, clap: 1, merge: 1, orbiting: 1, twist: 1, tear: 1, push: 1, pull: 1, sphere: 1 };
 
@@ -213,20 +187,6 @@ export const KineticCore = ({
         onGestureDetected={handleGestureDetected}
         enabled={handTrackingEnabled}
       />
-
-      {/* Debug overlay - enable showDebug for testing */}
-      {showDebug && handLandmarks && (
-        <div className="fixed top-4 left-4 bg-black/90 text-white p-4 rounded-xl text-xs font-mono z-50 max-w-xs backdrop-blur-xl border border-primary/30">
-          <div className="text-primary font-bold mb-2">🎯 Gesture Debug</div>
-          <div>Gesture: <span className="text-primary">{gesture}</span></div>
-          <div>Hands: <span className="text-accent">{handsDetected}</span></div>
-          <div>Finger Spread: {handLandmarks.fingerSpread.toFixed(2)}</div>
-          <div>Velocity: {handLandmarks.velocity.length().toFixed(3)}</div>
-          <div className="mt-2 text-muted-foreground">
-            Palm Normal: ({handLandmarks.palmNormal.x.toFixed(2)}, {handLandmarks.palmNormal.y.toFixed(2)}, {handLandmarks.palmNormal.z.toFixed(2)})
-          </div>
-        </div>
-      )}
 
       <div 
         className={`${sizeClasses[size]} cursor-pointer`}
@@ -263,14 +223,12 @@ export const KineticCore = ({
             )}
           </p>
           
-          {/* Hand count indicator */}
           {handsDetected > 0 && (
             <p className="text-xs text-muted-foreground/70 mt-1">
               {handsDetected === 2 ? '✋✋ Two hands' : '✋ One hand'}
             </p>
           )}
           
-          {/* Gesture display */}
           {gesture !== 'idle' && (
             <p className={`text-sm mt-2 font-medium ${isTwoHandGesture ? 'text-accent' : 'text-primary'}`}>
               {GESTURE_DISPLAY[gesture]}
