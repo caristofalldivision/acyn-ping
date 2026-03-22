@@ -65,12 +65,7 @@ export const PWAInstallPrompt = () => {
       >
         <div className="flex items-start gap-3">
           <div 
-            className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{
-              background: `radial-gradient(circle at 30% 30%, 
-                hsl(var(--orb-glow) / 0.8), 
-                hsl(var(--orb-core) / 0.6) 100%)`,
-            }}
+            className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-primary/20"
           >
             <Smartphone className="w-6 h-6 text-foreground" />
           </div>
