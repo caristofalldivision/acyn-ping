@@ -351,6 +351,21 @@ Extract NEW or UPDATED facts. For each fact, provide:
 - importance_score: 1-10 (how important is this)
 - is_update: true if updating existing knowledge
 
+STRICT VALIDATION RULES:
+- Only extract facts the user EXPLICITLY stated or confirmed. Never infer unstated preferences or technical details.
+- If the user mentioned a device model, firmware version, IP range, or network topology, extract it as "facts" with the specific detail.
+- Never assume technical details the user didn't mention (e.g., don't infer they use OSPF just because they mentioned routing).
+- Reject any item where the source is ambiguous or could be the AI's own suggestion rather than user-confirmed info.
+
+NETWORKING & IT SPECIFIC EXTRACTION:
+When conversations involve networking/IT topics, look for:
+- Device inventory: "facts" category - e.g., "user has MikroTik hAP ac3 at main office"
+- Network topology: "context" category - e.g., "office has 3 VLANs: management, staff, guest"
+- Configuration preferences: "preferences" category - e.g., "prefers CLI over WinBox"
+- ISP/service details: "facts" category - e.g., "ISP provides /29 subnet on fiber link"
+- Credentials context (NEVER actual passwords): "context" category - e.g., "uses RADIUS for hotspot auth"
+- Tools used: "skills" category - e.g., "uses Splynx for billing"
+
 COMMUNICATION STYLE LEARNING:
 Also detect user preferences for how they want responses formatted:
 - If user says "keep it short", "be brief" → preferences: response_length = brief_by_default
@@ -358,7 +373,7 @@ Also detect user preferences for how they want responses formatted:
 - If user says "explain only when asked" → preferences: detail_level = summarize_unless_asked
 - If user corrects style (e.g., "too long", "too formal") → extract as preference
 
-Only extract high-confidence, important information. Be conservative.`,
+Only extract high-confidence, important information. Be conservative. When in doubt, DO NOT extract.`,
                 },
                 {
                   role: "user",
