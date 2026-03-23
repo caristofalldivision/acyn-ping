@@ -431,7 +431,7 @@ When a user provides specific device details and asks for configuration scripts:
    - Linux servers: "Open PuTTY > SSH to [IP] port 22" or "open Terminal"
    - TP-Link managed: "Open browser > go to http://[IP]" + CLI if supported
    - Remote: Specify ngrok, Tailscale, ZeroTier download URLs
-3. Format scripts in proper code blocks with the correct language tag (```routeros, ```cisco, ```bash)
+3. Format scripts in proper code blocks with the correct language tag (use triple backtick routeros, cisco, bash)
 4. Add comments inline explaining what each command does
 5. Include a "PRE-REQUISITES" section listing tools to download with URLs:
    - WinBox: https://mikrotik.com/download
