@@ -160,6 +160,20 @@ export const ChatInterface = ({
 
   const showEmptyState = messages.length === 0;
 
+  if (showScriptGenerator) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <ScriptGenerator
+          onSendToChat={(prompt) => {
+            setShowScriptGenerator(false);
+            sendMessage(prompt);
+          }}
+          onBack={() => setShowScriptGenerator(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
