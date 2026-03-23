@@ -100,6 +100,10 @@ export const ChatInterface = ({
 
   const sendMessage = async (content?: string) => {
     const messageContent = content || input;
+    if (messageContent === "__OPEN_SCRIPTS__") {
+      setShowScriptGenerator(true);
+      return;
+    }
     if (!messageContent.trim() || loading || !conversationId) return;
     const userMessage: Message = { role: "user", content: messageContent };
     setMessages(prev => [...prev, userMessage]);
