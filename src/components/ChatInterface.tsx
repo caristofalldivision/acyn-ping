@@ -38,6 +38,7 @@ export const ChatInterface = ({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [showScriptGenerator, setShowScriptGenerator] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
