@@ -1,122 +1,74 @@
 
 
-# Complete UI Redesign: ChatGPT/Gemini/Claude-Inspired Interface
+# Enhance Topher: Networking/IT Expertise & Improved Self-Learning
 
-## What's Being Done
+## What This Plan Does
 
-1. **Delete all KineticCore/orb/hand-gesture code** - Remove the entire `KineticCore` directory, `VoiceOrb.tsx`, `FloatingOrb.tsx`, `FloatingAssistant.tsx`, `BubbleChat.tsx`, `FloatingParticles.tsx`, `Starfield.tsx`, `NebulaBackground.tsx`, and related hooks/plugins.
+Two changes:
 
-2. **Redesign from scratch** with a clean, professional dark UI inspired by ChatGPT, Gemini, and Claude - mobile-first.
+1. **Massively expand the system prompt** in the chat edge function to include deep networking/IT expertise (Cisco IOS, MikroTik RouterOS, WinBox, hotspot/PPPoE setup, captive portals, payment gateways, managed switches, cloud server configuration, IT support workflows)
+2. **Improve self-learning** to auto-extract and save knowledge after every conversation turn (not just background cron), with stronger anti-hallucination instructions
 
----
+## Changes
 
-## Design Direction
+### 1. Update `supabase/functions/chat/index.ts`
 
-Pulling the best from each:
-- **ChatGPT**: Clean sidebar with conversation list, centered chat, model selector concept
-- **Gemini**: Warm greeting with suggestion chips, centered input with attachment options
-- **Claude**: Minimal clean aesthetic, subtle warm tones, elegant typography
+**System prompt expansion** - Add comprehensive networking/IT expertise section:
+- Cisco device configuration (IOS CLI, running-config, VLANs, ACLs, OSPF, BGP, port security)
+- MikroTik RouterOS (WinBox, CLI, hotspot setup, PPPoE server, queues, firewall, NAT, VLAN, bonding, CAPsMAN/WiFi)
+- Captive portal design with payment gateway integration (M-Pesa, PayPal, Stripe)
+- Managed switch configuration (VLANs, STP, LACP, port mirroring)
+- Cloud-hosted PPPoE/hotspot servers (VPS setup, tunnel configs)
+- Server administration (Linux, Windows Server, DNS, DHCP, Active Directory)
+- Network troubleshooting methodology (Layer 1-7 approach)
+- Remote management tools (WinBox, SSH, Telnet, SNMP, The Dude)
 
-**Color palette**: Neutral dark (not cosmic) - dark gray backgrounds (`#0f0f0f`, `#1a1a1a`, `#2a2a2a`), white/light text, single teal accent (`hsl(173 80% 40%)`) for brand consistency. No purple, no cosmic, no nebula.
+**Anti-hallucination directives** added to system prompt:
+- "If you are not certain about a specific command syntax, version compatibility, or configuration detail, explicitly say so"
+- "Never fabricate CLI commands, IP addresses, or configuration snippets"
+- "When providing device configurations, specify the exact RouterOS version or IOS version the commands apply to"
+- "Ask clarifying questions about the user's exact hardware model, firmware version, and network topology before providing configurations"
 
-**Font**: Inter (already loaded) - clean, modern, professional.
+**Inline real-time learning enhancement** - After every assistant response, trigger a lightweight knowledge extraction call that saves important facts from the current exchange automatically (not waiting for 6-hour cron). This uses the existing `learned_knowledge` table.
 
----
+### 2. Update `supabase/functions/background-learning/index.ts`
 
-## Files to DELETE
-- `src/components/KineticCore/` (entire directory)
-- `src/components/VoiceOrb.tsx`
-- `src/components/FloatingOrb.tsx`
-- `src/components/FloatingAssistant.tsx`
-- `src/components/BubbleChat.tsx`
-- `src/components/FloatingParticles.tsx`
-- `src/components/Starfield.tsx`
-- `src/components/NebulaBackground.tsx`
-- `src/hooks/useFloatingOverlay.ts`
-- `src/plugins/floating-overlay/` (entire directory)
-- `android/` (entire directory)
-
-## Files to CREATE/MODIFY
-
-### 1. `src/index.css` - Complete color overhaul
-- Neutral dark palette: background `#0f0f0f`, card `#1a1a1a`, border `#2a2a2a`
-- Remove all cosmic/orb/nebula animations and variables
-- Keep only: `fadeIn`, prose styles, glass-card (simplified)
-- Clean scrollbar styling
-
-### 2. `src/pages/Index.tsx` - Clean layout
-- Remove all cosmic backgrounds (Starfield, Nebula, FloatingParticles)
-- Simple flex layout: sidebar + main content
-- Mobile: full-width chat, hamburger for sidebar
-- Desktop: 260px sidebar + chat area
-- Clean header with app name, new chat button, user menu
-
-### 3. `src/components/ChatInterface.tsx` - Core chat redesign
-- **Empty state**: Centered greeting "What can I help with?" + 4 suggestion chips in a 2x2 grid
-- **Input bar**: Rounded pill at bottom with textarea (auto-grow), attachment button, send button. Centered, max-width 768px
-- **Messages**: Clean bubbles - user messages right-aligned with accent bg, assistant messages left-aligned plain text (no bubble bg, just left-aligned with small avatar)
-- **Mobile**: Input sticks to bottom, messages scroll independently
-
-### 4. `src/components/ConversationList.tsx` - Sidebar redesign
-- Clean list with hover states
-- Today/Previous 7 Days/Older grouping
-- Subtle hover actions (edit, delete)
-- New Chat button at top
-- User info at bottom
-
-### 5. `src/components/Auth.tsx` - Clean auth page
-- Remove VoiceOrb import
-- Simple centered card with Topha branding
-- Clean form inputs
-
-### 6. `src/App.tsx` - Remove FloatingAssistant and PWAInstallPrompt
-- Clean app shell, just routes + providers
-
-### 7. `src/components/IconSidebar.tsx` - Remove (merge into sidebar)
-
-### 8. `src/components/SettingsPanel.tsx` - Simplify
-- Remove overlay/Capacitor related code
-- Keep training/memory/calendar tabs
-
-### 9. `tailwind.config.ts` - Remove cosmic color tokens, keep clean config
+**Enhanced extraction prompt** - Add networking/IT-specific categories to the knowledge extraction:
+- New category hints: "network_config", "device_inventory", "topology", "credentials_context" (not actual passwords, just context like "user manages a MikroTik hAP ac2 at office")
+- Stronger validation: reject any items that appear assumed rather than stated by the user
+- Add instruction: "Only extract facts the user explicitly stated or confirmed. Never infer unstated preferences or technical details."
 
 ---
 
-## Layout Structure
+## Technical Details
 
-```text
-Mobile (< 768px):
-┌─────────────────────┐
-│ ☰  Topha    ⚙️ 👤  │  <- 48px header
-├─────────────────────┤
-│                     │
-│   Messages scroll   │
-│                     │
-├─────────────────────┤
-│  [  Message...  ➤]  │  <- Fixed input bar
-└─────────────────────┘
+### Files Modified
+| File | Change |
+|------|--------|
+| `supabase/functions/chat/index.ts` | Expanded system prompt with IT/networking expertise, anti-hallucination rules, inline auto-learning after each response |
+| `supabase/functions/background-learning/index.ts` | Enhanced extraction prompt with IT-specific categories and stricter validation |
 
-Desktop (>= 768px):
-┌──────────┬──────────────────────────┐
-│ Topha    │                          │
-│ [+ New]  │    Centered messages     │
-│          │    max-w-3xl             │
-│ Today    │                          │
-│  Chat 1  │                          │
-│  Chat 2  │                          │
-│ Previous │                          │
-│  Chat 3  │ ┌──────────────────────┐ │
-│          │ │ [Message...     📎 ➤]│ │
-│ 👤 User  │ └──────────────────────┘ │
-└──────────┴──────────────────────────┘
+### Inline Auto-Learning (New Logic in chat function)
+After generating the assistant reply, fire a non-blocking knowledge extraction call:
+```typescript
+// After getting the reply, extract knowledge from this exchange (non-blocking)
+const recentExchange = messages.slice(-4); // last 2 turns
+fetch(`${supabaseUrl}/functions/v1/analyze-conversations`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}` },
+  body: JSON.stringify({ userId }),
+}).catch(() => {}); // fire-and-forget
 ```
+This ensures knowledge is captured immediately, not just every 6 hours.
 
-## Key Design Details
-
-- **No orb, no particles, no cosmic effects** - Clean professional dark UI
-- **Message rendering**: Assistant messages show as plain markdown (left-aligned, no bubble), user messages in accent-colored pill
-- **Empty state**: Large centered "Hi, {name}" + "What can I help with?" + suggestion chips
-- **Input**: Rounded container with subtle border, auto-expanding textarea, max 200px height
-- **Sidebar**: 260px wide on desktop, sheet on mobile, grouped conversations by date
-- **Transitions**: Subtle fade-in for messages, smooth sidebar toggle
+### Anti-Hallucination Rules (Added to System Prompt)
+```
+ACCURACY & HONESTY RULES (CRITICAL):
+- Never guess or assume. If uncertain, say "I'm not sure about X, let me know your exact setup"
+- Never fabricate CLI commands, IPs, or configs
+- Always specify which RouterOS/IOS version a command applies to
+- Ask for hardware model, firmware version, and topology before providing configs
+- Distinguish between "I know this" and "this is a common approach" 
+- If the user's scenario has multiple valid solutions, present options with tradeoffs
+```
 
