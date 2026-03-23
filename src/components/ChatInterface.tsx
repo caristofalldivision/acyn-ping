@@ -3,10 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Bot, User, ArrowDown, Paperclip, FileText, Lightbulb, Briefcase, MessageSquare } from "lucide-react";
+import { Send, Bot, User, ArrowDown, Paperclip, FileText, Lightbulb, Terminal, Wifi } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { DownloadButton } from "./DownloadButton";
+import { ScriptGenerator } from "./ScriptGenerator";
 
 interface Message {
   role: "user" | "assistant";
@@ -21,10 +22,10 @@ interface ChatInterfaceProps {
 }
 
 const suggestions = [
-  { icon: FileText, label: "Create a presentation", prompt: "Help me create a presentation" },
+  { icon: Terminal, label: "Generate config scripts", prompt: "__OPEN_SCRIPTS__" },
+  { icon: Wifi, label: "Setup a hotspot", prompt: "Help me set up a MikroTik hotspot from scratch. Ask me about my device model and RouterOS version first." },
   { icon: Lightbulb, label: "Brainstorm ideas", prompt: "Help me brainstorm ideas" },
-  { icon: Briefcase, label: "Draft an email", prompt: "Help me draft a professional email" },
-  { icon: MessageSquare, label: "Summarize text", prompt: "Help me summarize a document" },
+  { icon: FileText, label: "Draft an email", prompt: "Help me draft a professional email" },
 ];
 
 export const ChatInterface = ({
