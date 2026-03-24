@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   ArrowLeft, Wifi, Server, Router, Globe, Shield, Terminal,
-  Copy, Check, ChevronRight, Zap, Network, MonitorSpeaker
+  Copy, Check, ChevronRight, Zap, Network, MonitorSpeaker, CreditCard, Lock, Radio
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -39,10 +39,225 @@ interface Template {
 }
 
 const templates: Template[] = [
+  // === NEW: Complete ISP Hotspot Business ===
+  {
+    id: "isp-hotspot-business",
+    title: "Complete ISP Hotspot Business",
+    description: "Full hotspot business: IP setup, DHCP, hotspot server, captive portal, billing, payments, walled garden, NAT, firewall, user management - everything",
+    icon: CreditCard,
+    category: "ISP Business",
+    tools: ["WinBox", "Terminal/SSH", "Web Browser"],
+    fields: [
+      { id: "routeros_version", label: "RouterOS Version", placeholder: "e.g., 7.14, 6.49", type: "text", required: true, helpText: "System > Resources in WinBox" },
+      { id: "model", label: "MikroTik Model", placeholder: "e.g., hAP ac2, RB750Gr3, CCR1009", type: "text", required: true },
+      { id: "wan_interface", label: "WAN/Internet Interface", placeholder: "e.g., ether1", type: "text", required: true },
+      { id: "hotspot_interface", label: "Hotspot Interface (clients connect here)", placeholder: "e.g., ether2, wlan1, bridge1", type: "text", required: true },
+      { id: "network", label: "Hotspot Network Range", placeholder: "e.g., 192.168.88.0/24", type: "text", required: true },
+      { id: "gateway", label: "Gateway IP", placeholder: "e.g., 192.168.88.1", type: "text", required: true },
+      { id: "isp_name", label: "Your ISP/Business Name", placeholder: "e.g., FastNet WiFi", type: "text", required: true },
+      { id: "plans", label: "Bandwidth Plans (name, speed, price, duration)", placeholder: "e.g.,\n1hr - 2Mbps - KES 20\n24hr - 5Mbps - KES 100\nWeekly - 10Mbps - KES 500\nMonthly - 10Mbps - KES 1500", type: "textarea", required: true, helpText: "One plan per line: name - speed - price - duration" },
+      { id: "payment", label: "Payment Method", type: "select", placeholder: "", options: [
+        { value: "voucher", label: "Manual Vouchers (print & sell)" },
+        { value: "mpesa", label: "M-Pesa (auto-activate on payment)" },
+        { value: "stripe", label: "Stripe (card payments)" },
+        { value: "paypal", label: "PayPal" },
+      ], required: true },
+      { id: "radius", label: "Use RADIUS for billing?", type: "select", placeholder: "", options: [
+        { value: "no", label: "No - MikroTik local users (simpler)" },
+        { value: "yes", label: "Yes - FreeRADIUS + DaloRADIUS on VPS" },
+      ]},
+      { id: "radius_ip", label: "RADIUS Server IP (if using RADIUS)", placeholder: "e.g., VPS IP", type: "text" },
+      { id: "dns", label: "DNS Servers", placeholder: "e.g., 8.8.8.8, 1.1.1.1", type: "text" },
+    ],
+    promptBuilder: (v) => `I need a COMPLETE ISP hotspot business setup on my MikroTik ${v.model} running RouterOS ${v.routeros_version}. Give me EVERYTHING step by step - I should be able to start selling internet access after following your guide.
+
+My details:
+- WAN interface: ${v.wan_interface}
+- Hotspot interface: ${v.hotspot_interface}
+- Network: ${v.network}
+- Gateway: ${v.gateway}
+- Business name: ${v.isp_name}
+- DNS: ${v.dns || "8.8.8.8, 1.1.1.1"}
+- Payment method: ${v.payment}
+${v.radius === "yes" ? `- RADIUS server: ${v.radius_ip || "need VPS setup too"}` : "- Using local MikroTik user management"}
+
+My bandwidth plans:
+${v.plans}
+
+I need EVERYTHING configured:
+1. IP addressing and DHCP server
+2. Hotspot server with captive portal
+3. User profiles for EACH plan with exact rate limits matching my plans above
+4. ${v.payment === "voucher" ? "Voucher generation script to create batches of vouchers for each plan" : `Walled garden rules for ${v.payment} payment pages so users can pay before login`}
+5. Custom captive portal login page with my business name "${v.isp_name}" ${v.payment !== "voucher" ? `and ${v.payment} payment button` : ""}
+6. NAT/masquerade for internet access
+7. Firewall rules to protect the router
+8. Queue setup (PCQ for fair bandwidth distribution)
+9. ${v.radius === "yes" ? "RADIUS client config on MikroTik + full FreeRADIUS server setup on the VPS" : "Local user management"}
+10. Session management (idle timeout, keepalive)
+11. Monitoring: how to see active users, bandwidth usage, connected clients
+
+Give me copy-paste ready commands for each step. Start with Step 1 and wait for me to confirm before moving to the next step.`
+  },
+
+  // === NEW: Complete PPPoE ISP Business ===
+  {
+    id: "isp-pppoe-business",
+    title: "Complete PPPoE ISP Business",
+    description: "Full PPPoE ISP: server setup, user profiles, queues, RADIUS billing, monitoring, customer management - complete business solution",
+    icon: Network,
+    category: "ISP Business",
+    tools: ["WinBox", "Terminal/SSH", "PuTTY"],
+    fields: [
+      { id: "routeros_version", label: "RouterOS Version", placeholder: "e.g., 7.14, 6.49", type: "text", required: true },
+      { id: "model", label: "MikroTik Model", placeholder: "e.g., CCR1009, RB3011, hEX S", type: "text", required: true },
+      { id: "wan_interface", label: "WAN Interface", placeholder: "e.g., ether1", type: "text", required: true },
+      { id: "pppoe_interface", label: "PPPoE Client Interface", placeholder: "e.g., ether2, bridge-local", type: "text", required: true, helpText: "Interface facing your clients/switches" },
+      { id: "pool_range", label: "Client IP Pool", placeholder: "e.g., 10.0.0.2-10.0.0.254", type: "text", required: true },
+      { id: "local_ip", label: "PPPoE Server Local IP", placeholder: "e.g., 10.0.0.1", type: "text", required: true },
+      { id: "isp_name", label: "ISP Business Name", placeholder: "e.g., SpeedNet ISP", type: "text", required: true },
+      { id: "plans", label: "Speed Plans (name, download/upload, price)", placeholder: "e.g.,\nBasic - 5M/2M - KES 1500/month\nStandard - 10M/5M - KES 2500/month\nPremium - 20M/10M - KES 4000/month\nBusiness - 50M/25M - KES 8000/month", type: "textarea", required: true },
+      { id: "radius", label: "Billing System", type: "select", placeholder: "", options: [
+        { value: "local", label: "Local PPP secrets (small scale)" },
+        { value: "daloradius", label: "FreeRADIUS + DaloRADIUS (recommended)" },
+        { value: "splynx", label: "Splynx (commercial ISP platform)" },
+      ], required: true },
+      { id: "radius_ip", label: "Billing Server IP", placeholder: "e.g., VPS public IP", type: "text" },
+      { id: "queue_type", label: "Queue Method", type: "select", placeholder: "", options: [
+        { value: "simple", label: "Simple Queues (easier)" },
+        { value: "pcq", label: "Queue Tree + PCQ (better for many users)" },
+      ]},
+    ],
+    promptBuilder: (v) => `Set up a COMPLETE PPPoE ISP business on my MikroTik ${v.model} running RouterOS ${v.routeros_version}. I need everything to run an ISP.
+
+Details:
+- WAN: ${v.wan_interface}
+- PPPoE client-facing interface: ${v.pppoe_interface}
+- Client IP pool: ${v.pool_range}
+- Server local IP: ${v.local_ip}
+- ISP name: ${v.isp_name}
+- Billing: ${v.radius}${v.radius_ip ? ` at ${v.radius_ip}` : ""}
+- Queue method: ${v.queue_type || "pcq"}
+
+Speed plans:
+${v.plans}
+
+Configure EVERYTHING:
+1. PPPoE server with service name "${v.isp_name}"
+2. PPP profiles for EACH plan with exact rate limits
+3. IP pool configuration
+4. ${v.radius !== "local" ? `RADIUS client on MikroTik + complete ${v.radius === "daloradius" ? "FreeRADIUS + DaloRADIUS" : "Splynx"} server setup` : "Sample PPP secrets for testing"}
+5. ${v.queue_type === "pcq" ? "Queue tree with PCQ for fair bandwidth" : "Simple queues per PPP profile"}
+6. NAT masquerade for internet
+7. Firewall rules (protect router, allow PPPoE)
+8. DNS configuration
+9. Monitoring: active connections, bandwidth per user, disconnecting users
+10. Accounting and session management
+
+Step by step please. Start with Step 1.`
+  },
+
+  // === NEW: RADIUS Server + Billing ===
+  {
+    id: "radius-billing",
+    title: "RADIUS Server + Billing",
+    description: "Complete FreeRADIUS + DaloRADIUS setup on VPS with MikroTik integration, user groups, bandwidth profiles",
+    icon: Radio,
+    category: "ISP Business",
+    tools: ["PuTTY/SSH", "WinSCP", "Web Browser"],
+    fields: [
+      { id: "os", label: "VPS Operating System", type: "select", placeholder: "", options: [
+        { value: "ubuntu22", label: "Ubuntu 22.04 LTS" },
+        { value: "ubuntu24", label: "Ubuntu 24.04 LTS" },
+        { value: "debian12", label: "Debian 12" },
+      ], required: true },
+      { id: "vps_ip", label: "VPS Public IP", placeholder: "e.g., 185.xxx.xxx.xxx", type: "text", required: true },
+      { id: "domain", label: "Domain for Web Panel (optional)", placeholder: "e.g., billing.myisp.com", type: "text" },
+      { id: "nas_ip", label: "MikroTik NAS IP", placeholder: "e.g., your MikroTik public IP", type: "text", required: true, helpText: "The IP your MikroTik uses to reach this VPS" },
+      { id: "radius_secret", label: "RADIUS Shared Secret", placeholder: "e.g., MySecretKey123", type: "text", required: true, helpText: "A password shared between MikroTik and RADIUS server" },
+      { id: "service_type", label: "Service Type", type: "select", placeholder: "", options: [
+        { value: "hotspot", label: "Hotspot users" },
+        { value: "pppoe", label: "PPPoE users" },
+        { value: "both", label: "Both Hotspot + PPPoE" },
+      ], required: true },
+      { id: "plans", label: "Bandwidth Plans", placeholder: "e.g.,\n1hr-2Mbps\n24hr-5Mbps\n5M-monthly\n10M-monthly", type: "textarea", required: true },
+      { id: "mikrotik_version", label: "MikroTik RouterOS Version", placeholder: "e.g., 7.14", type: "text", required: true },
+    ],
+    promptBuilder: (v) => `Set up a COMPLETE RADIUS billing server on my VPS (${v.os}, IP: ${v.vps_ip}) and connect it to my MikroTik (RouterOS ${v.mikrotik_version}).
+
+Details:
+- Domain: ${v.domain || "no domain, use IP"}
+- MikroTik NAS IP: ${v.nas_ip}
+- RADIUS secret: ${v.radius_secret}
+- Service type: ${v.service_type}
+- Plans: ${v.plans}
+
+I need EVERYTHING:
+1. VPS initial hardening (updates, firewall, fail2ban)
+2. Install MariaDB + create radius database
+3. Install FreeRADIUS + MySQL module
+4. Configure FreeRADIUS: clients.conf (add MikroTik as NAS), SQL module, authorize/authenticate
+5. Install DaloRADIUS web panel with Apache + PHP
+6. ${v.domain ? `SSL with Let's Encrypt for ${v.domain}` : "Access via http://VPS_IP/daloradius"}
+7. Create user groups for each plan with Mikrotik-Rate-Limit attributes
+8. Create sample users in each group
+9. Test authentication with radtest
+10. MikroTik side: configure RADIUS client, enable RADIUS for ${v.service_type}
+11. Verify end-to-end: user connects > RADIUS authenticates > bandwidth limit applied
+
+Step by step. Start with Step 1.`
+  },
+
+  // === NEW: WireGuard VPN Tunnel ===
+  {
+    id: "wireguard-tunnel",
+    title: "WireGuard VPN Tunnel",
+    description: "Secure tunnel between MikroTik and VPS - for RADIUS traffic, remote management, or routing",
+    icon: Lock,
+    category: "VPN",
+    tools: ["WinBox", "Terminal/SSH", "PuTTY"],
+    fields: [
+      { id: "routeros_version", label: "MikroTik RouterOS Version", placeholder: "e.g., 7.14 (must be v7+)", type: "text", required: true, helpText: "WireGuard requires RouterOS 7+" },
+      { id: "mikrotik_ip", label: "MikroTik Public IP", placeholder: "e.g., 41.xxx.xxx.xxx or dynamic", type: "text", required: true },
+      { id: "vps_ip", label: "VPS Public IP", placeholder: "e.g., 185.xxx.xxx.xxx", type: "text", required: true },
+      { id: "tunnel_subnet", label: "Tunnel Subnet", placeholder: "e.g., 10.10.10.0/30", type: "text", required: true, helpText: "Private IPs for the tunnel endpoints" },
+      { id: "vps_os", label: "VPS Operating System", type: "select", placeholder: "", options: [
+        { value: "ubuntu22", label: "Ubuntu 22.04" },
+        { value: "ubuntu24", label: "Ubuntu 24.04" },
+        { value: "debian12", label: "Debian 12" },
+      ], required: true },
+      { id: "purpose", label: "Tunnel Purpose", type: "select", placeholder: "", options: [
+        { value: "radius", label: "RADIUS traffic (billing server on VPS)" },
+        { value: "management", label: "Remote management of MikroTik" },
+        { value: "route_traffic", label: "Route all client traffic through VPS" },
+        { value: "site_to_site", label: "Site-to-site (connect two networks)" },
+      ], required: true },
+      { id: "lan_behind_mikrotik", label: "LAN Network Behind MikroTik", placeholder: "e.g., 192.168.88.0/24", type: "text" },
+    ],
+    promptBuilder: (v) => `Set up a WireGuard VPN tunnel between my MikroTik (RouterOS ${v.routeros_version}, IP: ${v.mikrotik_ip}) and my VPS (${v.vps_os}, IP: ${v.vps_ip}).
+
+Tunnel subnet: ${v.tunnel_subnet}
+Purpose: ${v.purpose}
+${v.lan_behind_mikrotik ? `LAN behind MikroTik: ${v.lan_behind_mikrotik}` : ""}
+
+I need BOTH sides configured:
+1. VPS side: install WireGuard, generate keys, create wg0.conf, enable service
+2. MikroTik side: create WireGuard interface, generate keys, add peer, assign IP
+3. Exchange public keys between both sides
+4. IP addressing on the tunnel
+5. ${v.purpose === "radius" ? "Routing so RADIUS traffic goes through the tunnel" : v.purpose === "route_traffic" ? "NAT on VPS + routing all MikroTik client traffic through VPS" : v.purpose === "management" ? "Allow WinBox/SSH access to MikroTik through tunnel" : "Routes for both LANs to reach each other"}
+6. Firewall rules on both sides to allow tunnel traffic
+7. Verification: ping through tunnel, test connectivity
+8. Make it persistent (survive reboots on both sides)
+
+Step by step. Start with Step 1.`
+  },
+
+  // === EXISTING TEMPLATES (reordered) ===
   {
     id: "mikrotik-hotspot",
     title: "MikroTik Hotspot Setup",
-    description: "Complete hotspot server with captive portal, user profiles, and bandwidth limits",
+    description: "Hotspot server with captive portal, user profiles, and bandwidth limits",
     icon: Wifi,
     category: "MikroTik",
     tools: ["WinBox", "Terminal/SSH"],
@@ -62,32 +277,22 @@ const templates: Template[] = [
         { value: "paypal", label: "PayPal" },
       ]},
     ],
-    promptBuilder: (v) => `Generate a COMPLETE, COPY-PASTE READY MikroTik hotspot configuration script for RouterOS ${v.routeros_version} on a ${v.model}.
+    promptBuilder: (v) => `Generate a COMPLETE MikroTik hotspot configuration for RouterOS ${v.routeros_version} on ${v.model}.
 
 Details:
 - Hotspot interface: ${v.hotspot_interface}
-- WAN interface: ${v.wan_interface}
-- Network: ${v.network}
-- Gateway: ${v.gateway}
+- WAN: ${v.wan_interface}
+- Network: ${v.network}, Gateway: ${v.gateway}
 - DNS: ${v.dns || "8.8.8.8, 1.1.1.1"}
-- Bandwidth plans: ${v.plans || "Basic 2M/1M, Standard 5M/2M, Premium 10M/5M"}
+- Plans: ${v.plans || "Basic 2M/1M, Standard 5M/2M, Premium 10M/5M"}
 - Payment: ${v.payment || "none"}
 
-REQUIREMENTS:
-1. Provide the EXACT CLI commands in order - user will paste directly into terminal
-2. Include: IP pool, DHCP server, hotspot server, hotspot profiles with rate limits, user profiles, walled garden rules${v.payment !== "none" ? ", payment gateway integration details" : ""}
-3. Include NAT/masquerade rules for internet access
-4. Include DNS configuration
-5. Include firewall rules to protect the router
-6. Add verification commands after each section
-7. Tell the user EXACTLY which tool to use (WinBox Terminal, SSH via PuTTY, or direct console)
-8. Warn about any steps that will disconnect existing users
-9. Format as a step-by-step guide with clear sections`
+Include: IP pool, DHCP, hotspot server, profiles with rate limits, user profiles, walled garden${v.payment !== "none" ? `, ${v.payment} payment integration` : ""}, NAT, DNS, firewall, verification commands. Step by step, start with Step 1.`
   },
   {
     id: "mikrotik-pppoe",
     title: "MikroTik PPPoE Server",
-    description: "Full PPPoE server with user profiles, bandwidth management, and RADIUS",
+    description: "PPPoE server with user profiles, bandwidth management, and RADIUS",
     icon: Network,
     category: "MikroTik",
     tools: ["WinBox", "Terminal/SSH"],
@@ -105,26 +310,17 @@ REQUIREMENTS:
         { value: "daloradius", label: "Yes - DaloRADIUS" },
         { value: "splynx", label: "Yes - Splynx" },
       ]},
-      { id: "radius_ip", label: "RADIUS Server IP (if applicable)", placeholder: "e.g., 192.168.1.100 or VPS IP", type: "text" },
+      { id: "radius_ip", label: "RADIUS Server IP", placeholder: "e.g., 192.168.1.100 or VPS IP", type: "text" },
     ],
-    promptBuilder: (v) => `Generate a COMPLETE, COPY-PASTE READY MikroTik PPPoE server configuration for RouterOS ${v.routeros_version} on ${v.model}.
+    promptBuilder: (v) => `Generate a COMPLETE MikroTik PPPoE server configuration for RouterOS ${v.routeros_version} on ${v.model}.
 
 Details:
-- PPPoE interface: ${v.pppoe_interface}
-- WAN interface: ${v.wan_interface}
-- Client IP pool: ${v.pool_range}
-- Local address: ${v.local_ip}
-- Speed plans: ${v.plans || "5M/2M, 10M/5M, 20M/10M"}
-- RADIUS: ${v.radius || "no"}${v.radius_ip ? `, RADIUS IP: ${v.radius_ip}` : ""}
+- PPPoE interface: ${v.pppoe_interface}, WAN: ${v.wan_interface}
+- Client IP pool: ${v.pool_range}, Local: ${v.local_ip}
+- Plans: ${v.plans || "5M/2M, 10M/5M, 20M/10M"}
+- RADIUS: ${v.radius || "no"}${v.radius_ip ? `, IP: ${v.radius_ip}` : ""}
 
-REQUIREMENTS:
-1. Complete CLI script - paste directly into MikroTik terminal
-2. Include: PPPoE server, PPP profiles with rate limits, IP pool, ${v.radius !== "no" ? "RADIUS client config, " : "sample PPP secrets, "}NAT masquerade, firewall rules
-3. Include queue setup (simple queues or queue tree with PCQ)
-4. Show how to monitor active PPPoE connections
-5. Include verification commands
-6. Tell user exactly which tool to use (WinBox New Terminal, SSH)
-7. If RADIUS: include the RADIUS server-side setup commands too${v.radius === "freeradius" || v.radius === "daloradius" ? " (FreeRADIUS + MySQL on Ubuntu)" : ""}`
+Include: PPPoE server, PPP profiles with rate limits, IP pool, ${v.radius !== "no" ? "RADIUS client + server setup, " : "sample PPP secrets, "}NAT, firewall, queue setup, monitoring. Step by step, start with Step 1.`
   },
   {
     id: "cisco-vlan",
@@ -137,38 +333,27 @@ REQUIREMENTS:
       { id: "model", label: "Switch Model", placeholder: "e.g., Catalyst 2960, 3750, 9300", type: "text", required: true },
       { id: "ios_version", label: "IOS Version", placeholder: "e.g., 15.2, 16.12, 17.6", type: "text", required: true, helpText: "Check with: show version" },
       { id: "vlans", label: "VLANs to Create", placeholder: "e.g., VLAN 10 (Office) 192.168.10.0/24, VLAN 20 (Guest) 192.168.20.0/24", type: "textarea", required: true },
-      { id: "trunk_ports", label: "Trunk Ports", placeholder: "e.g., Gi0/1, Gi0/2", type: "text", helpText: "Ports connecting to other switches or router" },
+      { id: "trunk_ports", label: "Trunk Ports", placeholder: "e.g., Gi0/1, Gi0/2", type: "text" },
       { id: "access_ports", label: "Access Port Assignments", placeholder: "e.g., Fa0/1-12 = VLAN 10, Fa0/13-24 = VLAN 20", type: "textarea" },
       { id: "routing", label: "Inter-VLAN Routing", type: "select", placeholder: "", options: [
         { value: "none", label: "No routing needed" },
         { value: "svi", label: "Layer 3 Switch (SVI)" },
-        { value: "router-on-stick", label: "Router-on-a-Stick (external router)" },
+        { value: "router-on-stick", label: "Router-on-a-Stick" },
       ]},
       { id: "management_vlan", label: "Management VLAN & IP", placeholder: "e.g., VLAN 99, 192.168.99.1/24", type: "text" },
     ],
-    promptBuilder: (v) => `Generate COMPLETE Cisco IOS configuration commands for VLAN setup on ${v.model} running IOS ${v.ios_version}.
+    promptBuilder: (v) => `Generate COMPLETE Cisco IOS VLAN config for ${v.model} running IOS ${v.ios_version}.
 
-Details:
-- VLANs: ${v.vlans}
-- Trunk ports: ${v.trunk_ports || "none specified"}
-- Access ports: ${v.access_ports || "assign as needed"}
-- Inter-VLAN routing: ${v.routing || "none"}
-- Management VLAN: ${v.management_vlan || "VLAN 1 default"}
+VLANs: ${v.vlans}
+Trunks: ${v.trunk_ports || "none"}, Access: ${v.access_ports || "assign as needed"}
+Routing: ${v.routing || "none"}, Mgmt VLAN: ${v.management_vlan || "default"}
 
-REQUIREMENTS:
-1. Provide exact IOS commands - enter config mode, create VLANs, assign ports
-2. Include trunk configuration with allowed VLANs
-3. Include port security basics (sticky MAC, violation shutdown)
-4. ${v.routing === "svi" ? "Configure SVIs for each VLAN with IP addresses and ip routing" : v.routing === "router-on-stick" ? "Show the router sub-interface configuration too" : "No routing config needed"}
-5. Include spanning-tree PortFast on access ports
-6. Include verification: show vlan brief, show interfaces trunk, show ip interface brief
-7. Tell user to connect via Console cable + PuTTY (9600 baud) or SSH
-8. Include save config command (write memory)`
+Include: VLAN creation, port assignments, trunk config, port security, ${v.routing === "svi" ? "SVIs with ip routing" : v.routing === "router-on-stick" ? "router sub-interfaces" : "no routing"}, STP PortFast, verification commands. Step by step, start with Step 1.`
   },
   {
     id: "contabo-vps",
     title: "Contabo VPS Server Setup",
-    description: "Set up Ubuntu VPS for ISP management with RADIUS, billing, and monitoring",
+    description: "VPS setup for ISP management with RADIUS, billing, and monitoring",
     icon: Server,
     category: "Server",
     tools: ["PuTTY/SSH", "WinSCP", "Web Browser"],
@@ -181,49 +366,34 @@ REQUIREMENTS:
       ], required: true },
       { id: "vps_ip", label: "VPS Public IP", placeholder: "e.g., 185.xxx.xxx.xxx", type: "text", required: true },
       { id: "purpose", label: "Primary Purpose", type: "select", placeholder: "", options: [
-        { value: "radius", label: "FreeRADIUS + DaloRADIUS (ISP billing)" },
+        { value: "radius", label: "FreeRADIUS + DaloRADIUS" },
         { value: "splynx", label: "Splynx ISP Platform" },
-        { value: "mikrotik-manager", label: "MikroTik central management (The Dude)" },
+        { value: "mikrotik-manager", label: "MikroTik central management" },
         { value: "monitoring", label: "Monitoring (Grafana + InfluxDB)" },
         { value: "webserver", label: "Web Server (Nginx + SSL)" },
         { value: "custom", label: "Custom setup" },
       ], required: true },
       { id: "domain", label: "Domain Name (optional)", placeholder: "e.g., billing.myisp.com", type: "text" },
-      { id: "mikrotik_ip", label: "MikroTik Router IP (if connecting)", placeholder: "e.g., public IP or VPN IP of your MikroTik", type: "text" },
+      { id: "mikrotik_ip", label: "MikroTik Router IP", placeholder: "e.g., public IP of MikroTik", type: "text" },
       { id: "tunnel", label: "Tunnel to MikroTik?", type: "select", placeholder: "", options: [
         { value: "none", label: "No tunnel needed" },
-        { value: "l2tp", label: "L2TP/IPsec tunnel" },
+        { value: "l2tp", label: "L2TP/IPsec" },
         { value: "gre", label: "GRE tunnel" },
         { value: "wireguard", label: "WireGuard VPN" },
       ]},
     ],
-    promptBuilder: (v) => `Generate a COMPLETE server setup script for a Contabo VPS (${v.os}) at IP ${v.vps_ip}.
+    promptBuilder: (v) => `Set up my Contabo VPS (${v.os}) at ${v.vps_ip} for ${v.purpose}.
 
-Purpose: ${v.purpose}
-Domain: ${v.domain || "no domain yet"}
-MikroTik IP: ${v.mikrotik_ip || "not specified"}
+Domain: ${v.domain || "no domain"}
+MikroTik: ${v.mikrotik_ip || "not specified"}
 Tunnel: ${v.tunnel || "none"}
 
-REQUIREMENTS:
-1. Start with initial server hardening: update packages, create admin user, disable root SSH login, configure UFW/firewall, install fail2ban, set timezone
-2. Provide ALL commands in order - user will SSH in and paste them
-3. Tell user exactly: "Open PuTTY, enter IP ${v.vps_ip}, port 22, login as root with your Contabo password"
-${v.purpose === "radius" ? `4. Install FreeRADIUS + MySQL/MariaDB + DaloRADIUS web interface
-5. Configure Apache/Nginx for DaloRADIUS web panel
-6. Set up SSL with Let's Encrypt (if domain provided)
-7. Configure RADIUS clients (MikroTik NAS)
-8. Create sample user accounts and test authentication
-9. Show how to connect MikroTik to this RADIUS server` : ""}
-${v.purpose === "monitoring" ? `4. Install InfluxDB, Grafana, and Telegraf
-5. Configure Grafana dashboards for network monitoring
-6. Set up SNMP polling for MikroTik devices` : ""}
-${v.tunnel !== "none" ? `Include ${v.tunnel} tunnel configuration - BOTH the VPS side AND the MikroTik side commands` : ""}
-Include verification steps after each major section`
+Start with server hardening, then install and configure everything needed for ${v.purpose}. ${v.tunnel !== "none" ? `Include ${v.tunnel} tunnel setup on BOTH VPS and MikroTik sides.` : ""} Step by step, start with Step 1.`
   },
   {
     id: "mikrotik-firewall",
     title: "MikroTik Firewall Hardening",
-    description: "Comprehensive firewall rules, NAT, and security for your MikroTik",
+    description: "Comprehensive firewall rules, NAT, and security",
     icon: Shield,
     category: "MikroTik",
     tools: ["WinBox", "Terminal/SSH"],
@@ -231,66 +401,48 @@ Include verification steps after each major section`
       { id: "routeros_version", label: "RouterOS Version", placeholder: "e.g., 7.14, 6.49", type: "text", required: true },
       { id: "wan_interface", label: "WAN Interface", placeholder: "e.g., ether1, pppoe-out1", type: "text", required: true },
       { id: "lan_network", label: "LAN Network", placeholder: "e.g., 192.168.88.0/24", type: "text", required: true },
-      { id: "services", label: "Services to Allow From WAN", placeholder: "", type: "select", options: [
+      { id: "services", label: "Services to Allow From WAN", type: "select", placeholder: "", options: [
         { value: "none", label: "None (block all inbound)" },
         { value: "winbox", label: "WinBox only" },
         { value: "winbox_ssh", label: "WinBox + SSH" },
         { value: "webserver", label: "Web server (80/443)" },
         { value: "custom", label: "Custom ports" },
       ]},
-      { id: "custom_ports", label: "Custom Ports (if applicable)", placeholder: "e.g., 8080, 8443, 1723", type: "text" },
+      { id: "custom_ports", label: "Custom Ports", placeholder: "e.g., 8080, 8443, 1723", type: "text" },
     ],
     promptBuilder: (v) => `Generate COMPLETE MikroTik firewall rules for RouterOS ${v.routeros_version}.
 
-WAN interface: ${v.wan_interface}
-LAN: ${v.lan_network}
-WAN services: ${v.services || "none"}${v.custom_ports ? `, ports: ${v.custom_ports}` : ""}
+WAN: ${v.wan_interface}, LAN: ${v.lan_network}
+Allow from WAN: ${v.services || "none"}${v.custom_ports ? `, ports: ${v.custom_ports}` : ""}
 
-REQUIREMENTS:
-1. Complete /ip firewall filter rules (input, forward, output chains)
-2. Include protection against: port scanning, brute force, DDoS, DNS amplification
-3. Include NAT masquerade for internet access
-4. Include address-lists for blocking/allowing
-5. Add connection tracking rules (established, related, invalid)
-6. Include /ip firewall raw rules for DDoS protection
-7. Disable unnecessary services (/ip service)
-8. Change default ports for WinBox/SSH
-9. All commands copy-paste ready for terminal`
+Include: filter rules (input/forward/output), DDoS/brute force protection, NAT masquerade, address-lists, connection tracking, raw rules, disable unnecessary services, change default ports. Step by step, start with Step 1.`
   },
   {
     id: "tplink-managed",
     title: "TP-Link Managed Switch",
-    description: "VLAN, port config, and STP setup for TP-Link managed switches",
+    description: "VLAN, port config, and STP setup for TP-Link switches",
     icon: Router,
     category: "TP-Link",
     tools: ["Web Browser", "Console Cable + PuTTY"],
     fields: [
       { id: "model", label: "Switch Model", placeholder: "e.g., TL-SG3428, T2600G-28TS", type: "text", required: true },
-      { id: "management_ip", label: "Management IP", placeholder: "e.g., 192.168.0.1 (default)", type: "text", required: true },
-      { id: "vlans", label: "VLANs to Create", placeholder: "e.g., VLAN 10 (Data), VLAN 20 (VoIP), VLAN 30 (Guest)", type: "textarea", required: true },
+      { id: "management_ip", label: "Management IP", placeholder: "e.g., 192.168.0.1", type: "text", required: true },
+      { id: "vlans", label: "VLANs to Create", placeholder: "e.g., VLAN 10 (Data), VLAN 20 (VoIP)", type: "textarea", required: true },
       { id: "uplink_port", label: "Uplink/Trunk Port", placeholder: "e.g., Port 1 or SFP1", type: "text", required: true },
-      { id: "port_assignments", label: "Port VLAN Assignments", placeholder: "e.g., Ports 2-8 = VLAN 10, Ports 9-16 = VLAN 20", type: "textarea" },
+      { id: "port_assignments", label: "Port VLAN Assignments", placeholder: "e.g., Ports 2-8 = VLAN 10", type: "textarea" },
     ],
-    promptBuilder: (v) => `Generate a COMPLETE configuration guide for TP-Link managed switch ${v.model}.
+    promptBuilder: (v) => `Configure my TP-Link ${v.model} managed switch at ${v.management_ip}.
 
-Management IP: ${v.management_ip}
 VLANs: ${v.vlans}
 Uplink: ${v.uplink_port}
-Port assignments: ${v.port_assignments || "assign based on VLANs listed"}
+Ports: ${v.port_assignments || "assign based on VLANs"}
 
-REQUIREMENTS:
-1. Provide BOTH web GUI steps (with exact menu paths and screenshots descriptions) AND CLI commands if available
-2. Tell user: "Open browser, go to http://${v.management_ip}, login with admin/admin (default)"
-3. Include 802.1Q VLAN configuration, PVID settings, tagged/untagged assignments
-4. Configure uplink as trunk (tagged for all VLANs)
-5. Enable STP (RSTP preferred) and configure root bridge priority if needed
-6. Include saving configuration
-7. Include verification steps`
+Include BOTH web GUI steps (exact menu paths) AND CLI commands. Configure 802.1Q VLANs, PVID, trunk, RSTP, save config. Step by step, start with Step 1.`
   },
   {
     id: "ngrok-remote",
     title: "Remote Access Setup",
-    description: "Set up ngrok, Tailscale, or ZeroTier for remote device management",
+    description: "ngrok, Tailscale, or ZeroTier for remote device management",
     icon: Globe,
     category: "Remote Access",
     tools: ["PuTTY/SSH", "ngrok", "PowerShell"],
@@ -301,68 +453,50 @@ REQUIREMENTS:
         { value: "zerotier", label: "ZeroTier (virtual network)" },
         { value: "cloudflare", label: "Cloudflare Tunnel" },
       ], required: true },
-      { id: "target_device", label: "Device to Access Remotely", placeholder: "e.g., MikroTik router, Ubuntu server, Windows PC", type: "text", required: true },
+      { id: "target_device", label: "Device to Access", placeholder: "e.g., MikroTik router, Ubuntu server", type: "text", required: true },
       { id: "target_ip", label: "Device Local IP", placeholder: "e.g., 192.168.88.1", type: "text", required: true },
-      { id: "services", label: "Services to Expose", placeholder: "e.g., WinBox (8291), SSH (22), Web UI (80)", type: "text", required: true },
+      { id: "services", label: "Services to Expose", placeholder: "e.g., WinBox (8291), SSH (22)", type: "text", required: true },
       { id: "os", label: "Your Local OS", type: "select", placeholder: "", options: [
         { value: "windows", label: "Windows" },
         { value: "macos", label: "macOS" },
         { value: "linux", label: "Linux" },
       ], required: true },
     ],
-    promptBuilder: (v) => `Generate a COMPLETE guide to set up remote access to ${v.target_device} at ${v.target_ip} using ${v.tool}.
+    promptBuilder: (v) => `Set up remote access to ${v.target_device} at ${v.target_ip} using ${v.tool}.
 
-Services to expose: ${v.services}
-User's OS: ${v.os}
+Services: ${v.services}
+My OS: ${v.os}
 
-REQUIREMENTS:
-1. Step-by-step installation of ${v.tool} on ${v.os}
-2. Configuration to expose the specified services
-3. Tell user EXACTLY which tools to download and from where (URLs)
-4. ${v.tool === "ngrok" ? "Include: ngrok install, authtoken setup, tunnel command for each service, and how to get a fixed domain" : ""}
-5. ${v.tool === "tailscale" ? "Include: Tailscale install on both ends, network setup, ACL configuration" : ""}
-6. Include security best practices (authentication, access control)
-7. Show how to connect to the remote device after setup
-8. Include commands for ${v.os === "windows" ? "PowerShell" : "Terminal"}`
+Include: installation, configuration, security, and how to connect after setup. Step by step, start with Step 1.`
   },
   {
     id: "custom-config",
     title: "Custom Configuration",
-    description: "Describe any network/server setup and get complete scripts",
+    description: "Describe any setup and get complete scripts",
     icon: Terminal,
     category: "Custom",
     tools: ["Varies"],
     fields: [
-      { id: "description", label: "What do you want to configure?", placeholder: "Describe your setup in detail: what devices, what you want to achieve, your network layout...", type: "textarea", required: true },
-      { id: "devices", label: "Devices Involved", placeholder: "e.g., MikroTik hAP ac2 (RouterOS 7.14), Cisco 2960 switch, Ubuntu 22.04 VPS", type: "textarea", required: true },
-      { id: "current_setup", label: "Current Network Setup (if any)", placeholder: "Describe what's already configured, IP ranges in use, etc.", type: "textarea" },
-      { id: "experience", label: "Your Experience Level", type: "select", placeholder: "", options: [
+      { id: "description", label: "What do you want to configure?", placeholder: "Describe your setup in detail...", type: "textarea", required: true },
+      { id: "devices", label: "Devices Involved", placeholder: "e.g., MikroTik hAP ac2 (RouterOS 7.14), Cisco 2960", type: "textarea", required: true },
+      { id: "current_setup", label: "Current Setup (if any)", placeholder: "What's already configured?", type: "textarea" },
+      { id: "experience", label: "Experience Level", type: "select", placeholder: "", options: [
         { value: "beginner", label: "Beginner - explain everything" },
-        { value: "intermediate", label: "Intermediate - know basics" },
-        { value: "advanced", label: "Advanced - just give me the commands" },
+        { value: "intermediate", label: "Intermediate" },
+        { value: "advanced", label: "Advanced - just commands" },
       ]},
     ],
-    promptBuilder: (v) => `Generate a COMPLETE configuration guide for this setup:
-
-${v.description}
+    promptBuilder: (v) => `Configure this setup: ${v.description}
 
 Devices: ${v.devices}
-Current setup: ${v.current_setup || "fresh/new setup"}
-Experience level: ${v.experience || "beginner"}
+Current: ${v.current_setup || "fresh setup"}
+Level: ${v.experience || "beginner"}
 
-REQUIREMENTS:
-1. Provide complete, copy-paste ready scripts for EVERY device mentioned
-2. Tell the user exactly which tool to use for each device (WinBox, PuTTY, SSH, Console, Web Browser, PowerShell, etc.)
-3. Include download links for any required tools
-4. ${v.experience === "beginner" ? "Explain each command and what it does. Include screenshots descriptions where helpful." : ""}
-5. Include verification and testing commands after each section
-6. Warn about any steps that could cause downtime
-7. Include backup commands before making changes
-8. Format as a numbered step-by-step guide with clear device labels`
+Complete copy-paste scripts for every device. Tell me which tools to use. ${v.experience === "beginner" ? "Explain each command." : ""} Step by step, start with Step 1.`
   },
 ];
 
-const categories = ["All", "MikroTik", "Cisco", "Server", "TP-Link", "Remote Access", "Custom"];
+const categories = ["All", "ISP Business", "MikroTik", "Cisco", "VPN", "Server", "TP-Link", "Remote Access", "Custom"];
 
 export const ScriptGenerator = ({ onSendToChat, onBack }: ScriptGeneratorProps) => {
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -406,7 +540,6 @@ export const ScriptGenerator = ({ onSendToChat, onBack }: ScriptGeneratorProps) 
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  // Template selection view
   if (!selectedTemplate) {
     return (
       <div className="flex flex-col h-full">
@@ -474,7 +607,6 @@ export const ScriptGenerator = ({ onSendToChat, onBack }: ScriptGeneratorProps) 
     );
   }
 
-  // Form view
   return (
     <div className="flex flex-col h-full">
       <div className="flex-shrink-0 p-4 border-b border-border">
@@ -504,7 +636,7 @@ export const ScriptGenerator = ({ onSendToChat, onBack }: ScriptGeneratorProps) 
             </div>
             <p className="text-xs text-muted-foreground">
               Fill in your device details below. Topha will generate complete, copy-paste ready scripts
-              and tell you exactly which tools to use.
+              and guide you step by step - one step at a time.
             </p>
           </div>
 
