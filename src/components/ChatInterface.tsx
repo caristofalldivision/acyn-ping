@@ -280,6 +280,18 @@ export const ChatInterface = ({
                           />
                         </div>
                       )}
+                      {msg.content.includes("```") && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs gap-1.5 mt-2"
+                          disabled={savingMessageIdx === idx}
+                          onClick={() => saveMessageAsScript(msg.content, idx)}
+                        >
+                          <Save className="w-3 h-3" />
+                          {savingMessageIdx === idx ? "Saving..." : "Save Script"}
+                        </Button>
+                      )}
                     </>
                   ) : (
                     <p className="text-sm">{msg.content}</p>
