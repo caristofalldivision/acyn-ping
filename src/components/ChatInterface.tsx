@@ -109,6 +109,10 @@ export const ChatInterface = ({
       setShowScriptGenerator(true);
       return;
     }
+    if (messageContent === "__OPEN_PORTAL__") {
+      setShowPortalBuilder(true);
+      return;
+    }
     if (!messageContent.trim() || loading || !conversationId) return;
     const userMessage: Message = { role: "user", content: messageContent };
     setMessages(prev => [...prev, userMessage]);
