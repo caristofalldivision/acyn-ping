@@ -169,6 +169,44 @@ export const ChatInterface = ({
 
   const showEmptyState = messages.length === 0;
 
+  const saveMessageAsScript = async (content: string, idx: number) => {
+    setSavingMessageIdx(idx);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSavingMessageIdx(null); return; }
+    const title = content.slice(0, 60).replace(/[#*`]/g, "").trim() + "...";
+    const { error } = await supabase.from("saved_scripts").insert({
+      user_id: user.id,
+      title,
+      category: "Chat Script",
+      script_content: content,
+    });
+    setSavingMessageIdx(null);
+    if (!error) toast({ title: "Script saved!" });
+    else toast({ title: "Error saving", variant: "destructive" });
+  };
+
+  if (showSavedScripts) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <SavedScripts
+          onBack={() => setShowSavedScripts(false)}
+          onOpenInChat={(prompt) => {
+            setShowSavedScripts(false);
+            sendMessage(prompt);
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (showPortalBuilder) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <CaptivePortalBuilder onBack={() => setShowPortalBuilder(false)} />
+      </div>
+    );
+  }
+
   if (showScriptGenerator) {
     return (
       <div className="flex flex-col h-full overflow-hidden">
@@ -178,6 +216,8 @@ export const ChatInterface = ({
             sendMessage(prompt);
           }}
           onBack={() => setShowScriptGenerator(false)}
+          onOpenSaved={() => { setShowScriptGenerator(false); setShowSavedScripts(true); }}
+          onOpenPortalBuilder={() => { setShowScriptGenerator(false); setShowPortalBuilder(true); }}
         />
       </div>
     );
