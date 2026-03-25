@@ -500,7 +500,7 @@ Complete copy-paste scripts for every device. Tell me which tools to use. ${v.ex
 
 const categories = ["All", "ISP Business", "MikroTik", "Cisco", "VPN", "Server", "TP-Link", "Remote Access", "Custom"];
 
-export const ScriptGenerator = ({ onSendToChat, onBack }: ScriptGeneratorProps) => {
+export const ScriptGenerator = ({ onSendToChat, onBack, onOpenSaved, onOpenPortalBuilder }: ScriptGeneratorProps) => {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
