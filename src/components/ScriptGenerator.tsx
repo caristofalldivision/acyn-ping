@@ -546,14 +546,26 @@ export const ScriptGenerator = ({ onSendToChat, onBack, onOpenSaved, onOpenPorta
     return (
       <div className="flex flex-col h-full">
         <div className="flex-shrink-0 p-4 border-b border-border">
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-3">
             <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={onBack}>
               <ArrowLeft className="w-4 h-4" />
             </Button>
-            <div>
+            <div className="flex-1">
               <h2 className="text-lg font-semibold text-foreground">Script Generator</h2>
               <p className="text-xs text-muted-foreground">Fill in your details, get copy-paste ready scripts</p>
             </div>
+          </div>
+          <div className="flex gap-2 mb-3">
+            {onOpenSaved && (
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={onOpenSaved}>
+                <Copy className="w-3 h-3" /> Saved Scripts
+              </Button>
+            )}
+            {onOpenPortalBuilder && (
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={onOpenPortalBuilder}>
+                <Globe className="w-3 h-3" /> Portal Builder
+              </Button>
+            )}
           </div>
           <ScrollArea className="w-full">
             <div className="flex gap-2 pb-1">
