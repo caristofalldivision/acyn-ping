@@ -3,11 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Bot, User, ArrowDown, Paperclip, FileText, Lightbulb, Terminal, Wifi } from "lucide-react";
+import { Send, Bot, User, ArrowDown, Paperclip, FileText, Lightbulb, Terminal, Wifi, Save, Layout } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { DownloadButton } from "./DownloadButton";
 import { ScriptGenerator } from "./ScriptGenerator";
+import { SavedScripts } from "./SavedScripts";
+import { CaptivePortalBuilder } from "./CaptivePortalBuilder";
 
 interface Message {
   role: "user" | "assistant";
@@ -23,9 +25,9 @@ interface ChatInterfaceProps {
 
 const suggestions = [
   { icon: Terminal, label: "Generate config scripts", prompt: "__OPEN_SCRIPTS__" },
+  { icon: Layout, label: "Captive Portal Builder", prompt: "__OPEN_PORTAL__" },
   { icon: Wifi, label: "Setup a hotspot", prompt: "Help me set up a MikroTik hotspot from scratch. Ask me about my device model and RouterOS version first." },
   { icon: Lightbulb, label: "Brainstorm ideas", prompt: "Help me brainstorm ideas" },
-  { icon: FileText, label: "Draft an email", prompt: "Help me draft a professional email" },
 ];
 
 export const ChatInterface = ({
@@ -39,6 +41,9 @@ export const ChatInterface = ({
   const [loading, setLoading] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showScriptGenerator, setShowScriptGenerator] = useState(false);
+  const [showSavedScripts, setShowSavedScripts] = useState(false);
+  const [showPortalBuilder, setShowPortalBuilder] = useState(false);
+  const [savingMessageIdx, setSavingMessageIdx] = useState<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -104,6 +109,10 @@ export const ChatInterface = ({
       setShowScriptGenerator(true);
       return;
     }
+    if (messageContent === "__OPEN_PORTAL__") {
+      setShowPortalBuilder(true);
+      return;
+    }
     if (!messageContent.trim() || loading || !conversationId) return;
     const userMessage: Message = { role: "user", content: messageContent };
     setMessages(prev => [...prev, userMessage]);
@@ -160,6 +169,44 @@ export const ChatInterface = ({
 
   const showEmptyState = messages.length === 0;
 
+  const saveMessageAsScript = async (content: string, idx: number) => {
+    setSavingMessageIdx(idx);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSavingMessageIdx(null); return; }
+    const title = content.slice(0, 60).replace(/[#*`]/g, "").trim() + "...";
+    const { error } = await supabase.from("saved_scripts").insert({
+      user_id: user.id,
+      title,
+      category: "Chat Script",
+      script_content: content,
+    });
+    setSavingMessageIdx(null);
+    if (!error) toast({ title: "Script saved!" });
+    else toast({ title: "Error saving", variant: "destructive" });
+  };
+
+  if (showSavedScripts) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <SavedScripts
+          onBack={() => setShowSavedScripts(false)}
+          onOpenInChat={(prompt) => {
+            setShowSavedScripts(false);
+            sendMessage(prompt);
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (showPortalBuilder) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <CaptivePortalBuilder onBack={() => setShowPortalBuilder(false)} />
+      </div>
+    );
+  }
+
   if (showScriptGenerator) {
     return (
       <div className="flex flex-col h-full overflow-hidden">
@@ -169,6 +216,8 @@ export const ChatInterface = ({
             sendMessage(prompt);
           }}
           onBack={() => setShowScriptGenerator(false)}
+          onOpenSaved={() => { setShowScriptGenerator(false); setShowSavedScripts(true); }}
+          onOpenPortalBuilder={() => { setShowScriptGenerator(false); setShowPortalBuilder(true); }}
         />
       </div>
     );
@@ -230,6 +279,18 @@ export const ChatInterface = ({
                             mimeType={detectDownloadableContent(msg.content)!.mimeType}
                           />
                         </div>
+                      )}
+                      {msg.content.includes("```") && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs gap-1.5 mt-2"
+                          disabled={savingMessageIdx === idx}
+                          onClick={() => saveMessageAsScript(msg.content, idx)}
+                        >
+                          <Save className="w-3 h-3" />
+                          {savingMessageIdx === idx ? "Saving..." : "Save Script"}
+                        </Button>
                       )}
                     </>
                   ) : (
