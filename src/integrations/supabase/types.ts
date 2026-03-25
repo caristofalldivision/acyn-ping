@@ -319,6 +319,45 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_scripts: {
+        Row: {
+          category: string
+          created_at: string | null
+          description: string | null
+          form_values: Json | null
+          id: string
+          script_content: string
+          template_id: string | null
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string | null
+          description?: string | null
+          form_values?: Json | null
+          id?: string
+          script_content: string
+          template_id?: string | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          description?: string | null
+          form_values?: Json | null
+          id?: string
+          script_content?: string
+          template_id?: string | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_contacts: {
         Row: {
           created_at: string | null
