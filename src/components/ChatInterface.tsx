@@ -25,9 +25,9 @@ interface ChatInterfaceProps {
 
 const suggestions = [
   { icon: Terminal, label: "Generate config scripts", prompt: "__OPEN_SCRIPTS__" },
+  { icon: Layout, label: "Captive Portal Builder", prompt: "__OPEN_PORTAL__" },
   { icon: Wifi, label: "Setup a hotspot", prompt: "Help me set up a MikroTik hotspot from scratch. Ask me about my device model and RouterOS version first." },
   { icon: Lightbulb, label: "Brainstorm ideas", prompt: "Help me brainstorm ideas" },
-  { icon: FileText, label: "Draft an email", prompt: "Help me draft a professional email" },
 ];
 
 export const ChatInterface = ({
