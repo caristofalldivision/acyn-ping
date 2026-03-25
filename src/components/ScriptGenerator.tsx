@@ -15,6 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 interface ScriptGeneratorProps {
   onSendToChat: (prompt: string) => void;
   onBack: () => void;
+  onOpenSaved?: () => void;
+  onOpenPortalBuilder?: () => void;
 }
 
 interface TemplateField {
