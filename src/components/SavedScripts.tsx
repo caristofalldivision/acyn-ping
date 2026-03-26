@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, Copy, Check, Trash2, Search, MessageSquare,
-  FileText, Clock, Filter
+  FileText, Clock, Download
 } from "lucide-react";
 
 interface SavedScript {
@@ -64,6 +64,20 @@ export const SavedScripts = ({ onBack, onOpenInChat }: SavedScriptsProps) => {
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
     toast({ title: "Copied to clipboard" });
+  };
+
+  const downloadRsc = (script: SavedScript) => {
+    const filename = script.title.replace(/[^a-zA-Z0-9_-]/g, "_") + ".rsc";
+    const blob = new Blob([script.script_content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: "Downloaded", description: `${filename} ready for import` });
   };
 
   const categories = ["All", ...Array.from(new Set(scripts.map(s => s.category)))];
@@ -167,7 +181,7 @@ export const SavedScripts = ({ onBack, onOpenInChat }: SavedScriptsProps) => {
                   </pre>
                 )}
 
-                <div className="flex gap-2 pt-1">
+                <div className="flex flex-wrap gap-1.5 pt-1">
                   <Button
                     variant="outline"
                     size="sm"
@@ -181,10 +195,19 @@ export const SavedScripts = ({ onBack, onOpenInChat }: SavedScriptsProps) => {
                     variant="outline"
                     size="sm"
                     className="h-7 text-xs gap-1.5"
+                    onClick={() => downloadRsc(script)}
+                  >
+                    <Download className="w-3 h-3" />
+                    .rsc
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1.5"
                     onClick={() => onOpenInChat(script.script_content)}
                   >
                     <MessageSquare className="w-3 h-3" />
-                    Open in Chat
+                    Chat
                   </Button>
                   <Button
                     variant="ghost"
