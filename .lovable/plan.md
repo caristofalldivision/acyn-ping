@@ -1,83 +1,43 @@
 
 
-# Saved Scripts + Captive Portal Template Builder
+# .RSC Export, New Portal Themes & Full Responsiveness
 
-## Overview
+## Changes
 
-Two new features:
-1. **Saved Scripts** - Users can save generated configurations to their account and access/manage them later
-2. **Captive Portal Builder** - Visual editor where users customize a hotspot login page (logo, colors, payment buttons) and get the complete HTML/CSS to deploy
+### 1. SavedScripts.tsx - Add .rsc download button
+- Add a "Download .rsc" button next to Copy/Open in Chat for each saved script
+- Uses the existing `DownloadButton` pattern: creates a Blob with the script content, triggers download as `{title}.rsc` (sanitized filename)
+- Add `Download` icon from lucide-react
+- Make the action buttons wrap properly on small screens using `flex-wrap`
 
-## Database Changes
+### 2. CaptivePortalBuilder.tsx - Add 3 new theme presets + responsiveness
 
-### New table: `saved_scripts`
-```sql
-CREATE TABLE saved_scripts (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  title TEXT NOT NULL,
-  description TEXT,
-  category TEXT NOT NULL DEFAULT 'general',
-  template_id TEXT,
-  script_content TEXT NOT NULL,
-  form_values JSONB,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
--- RLS: users CRUD their own scripts only
-```
+**New theme presets** (applied as one-click configs that set all colors + layout):
+- **🎮 Dark Gaming** - Deep purple/black bg (#0a0015), neon green accent (#00ff88), card with subtle glow border, minimal layout
+- **🏢 Corporate Clean** - White/light gray bg (#f8fafc), navy primary (#1e3a5f), clean centered layout, professional typography  
+- **☕ Cafe/Restaurant** - Warm brown bg (#2c1810), orange accent (#f97316), cream text, cozy centered layout with warm tones
 
-No new table needed for captive portal builder - it generates HTML on the client side that users can copy or save as a script.
+**Theme selector** added to the Brand tab as a row of clickable preset cards with emoji + name, placed before the ISP name input. Clicking a preset fills all color/layout fields at once but keeps user's ISP name and payment settings.
 
-## File Changes
+**Add download HTML button** in the footer alongside Copy and Save - downloads as `login.html`.
 
-### 1. `src/components/ScriptGenerator.tsx`
-- Add a "Save Script" button after generation that saves the prompt + response to `saved_scripts`
-- Add a "Saved Scripts" tab/button at the top of the script generator view
-- Show saved scripts list with copy, delete, and re-generate actions
+**Responsiveness fixes:**
+- Tab triggers: reduce to icons-only on screens < 400px using responsive classes
+- Preview iframe: use `aspect-ratio: 9/16` on mobile instead of fixed 400px height
+- Footer buttons: stack vertically on very small screens
+- Color picker grid: single column on xs screens
 
-### 2. `src/components/SavedScripts.tsx` (NEW)
-- List of user's saved scripts grouped by category
-- Each script card shows: title, category, date, preview
-- Actions: copy full script, delete, open in chat (re-send prompt)
-- Search/filter by category
-- Empty state with helpful message
+### 3. SavedScripts.tsx - Responsiveness fixes
+- Action buttons: use `flex-wrap gap-1.5` so they wrap on narrow screens
+- Script card padding: reduce to `p-3` on mobile
+- Search input and category pills: already responsive, no changes needed
 
-### 3. `src/components/CaptivePortalBuilder.tsx` (NEW)
-Visual editor with live preview:
-- **Branding section**: ISP name input, logo upload URL, tagline
-- **Colors section**: Background color, primary button color, text color, accent color (color pickers)
-- **Payment buttons**: Toggle M-Pesa, Stripe, PayPal, Voucher code - each adds a styled button to the portal
-- **Layout options**: Select from 2-3 layout styles (centered card, full-screen split, minimal)
-- **Live preview**: Real-time HTML preview in an iframe showing exactly what the captive portal will look like
-- **Export**: "Copy HTML" button gives the complete HTML/CSS file ready to upload to MikroTik hotspot directory
-- **Save**: Save the portal config as a saved script for later access
+### 4. CaptivePortalBuilder.tsx - Download .html button
+- Add a third button in the footer: "Download HTML" that triggers a blob download of the generated HTML as `login.html`
 
-The generated HTML will be a complete, self-contained file with inline CSS - no external dependencies - ready to be uploaded as `login.html` to a MikroTik's hotspot directory via WinBox Files.
-
-### 4. `src/components/ChatInterface.tsx`
-- Add suggestion chip for "Captive Portal Builder" that opens the builder
-- Update `__OPEN_SCRIPTS__` flow: add "Saved" tab alongside generator
-- After AI generates a script response, show a "Save this script" button on the message
-
-### 5. `src/pages/Index.tsx`
-- No major changes - captive portal builder and saved scripts are accessed through the chat interface / script generator
-
-## Technical Details
-
-| File | Action |
+## Files Modified
+| File | Change |
 |------|--------|
-| `saved_scripts` table | CREATE via migration + RLS policies |
-| `src/components/SavedScripts.tsx` | NEW - saved scripts list UI |
-| `src/components/CaptivePortalBuilder.tsx` | NEW - visual portal editor with live preview |
-| `src/components/ScriptGenerator.tsx` | ADD saved scripts tab + save button |
-| `src/components/ChatInterface.tsx` | ADD captive portal suggestion chip + save script button on messages |
-
-### Captive Portal HTML Output Structure
-The builder generates a complete MikroTik-compatible `login.html` with:
-- MikroTik hotspot variables (`$(link-login-only)`, `$(link-status)`, etc.)
-- Responsive CSS (works on phones)
-- Payment button sections with walled garden instructions
-- Custom branding (colors, logo, ISP name)
-- Login form with username/password or voucher code field
+| `src/components/SavedScripts.tsx` | Add .rsc download button per script, responsive button wrapping |
+| `src/components/CaptivePortalBuilder.tsx` | Add 3 theme presets (gaming/corporate/cafe), download HTML button, responsive fixes |
 
