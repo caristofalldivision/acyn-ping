@@ -960,23 +960,12 @@ Remember: You're not just answering questions, you're a strategic partner helpin
       });
     }
 
-    // First API call - check if tool use is needed
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages,
-        ],
-        tools: tools,
-        tool_choice: "auto",
-      }),
-    });
+    // First API call - Pro with Flash fallback on 429
+    let response = await callGateway(PRIMARY_MODEL, true);
+    if (response.status === 429) {
+      console.warn("Pro rate-limited, falling back to Flash");
+      response = await callGateway(FALLBACK_MODEL, true);
+    }
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -1016,22 +1005,11 @@ Remember: You're not just answering questions, you're a strategic partner helpin
         console.log(`Tool ${toolCall.function.name} result:`, result);
       }
 
-      const finalResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: systemPrompt },
-            ...messages,
-            assistantMessage,
-            ...toolResults,
-          ],
-        }),
-      });
+      let finalResponse = await callGateway(PRIMARY_MODEL, false, [assistantMessage, ...toolResults]);
+      if (finalResponse.status === 429) {
+        console.warn("Pro rate-limited on tool follow-up, falling back to Flash");
+        finalResponse = await callGateway(FALLBACK_MODEL, false, [assistantMessage, ...toolResults]);
+      }
 
       if (!finalResponse.ok) {
         const errorText = await finalResponse.text();
