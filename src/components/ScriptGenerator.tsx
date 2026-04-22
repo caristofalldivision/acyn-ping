@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   ArrowLeft, Wifi, Server, Router, Globe, Shield, Terminal,
-  Copy, Check, ChevronRight, Zap, Network, MonitorSpeaker, CreditCard, Lock, Radio
+  Copy, Check, ChevronRight, Zap, Network, MonitorSpeaker, CreditCard, Lock, Radio, Workflow
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -17,6 +17,7 @@ interface ScriptGeneratorProps {
   onBack: () => void;
   onOpenSaved?: () => void;
   onOpenPortalBuilder?: () => void;
+  onOpenTopology?: () => void;
 }
 
 interface TemplateField {
