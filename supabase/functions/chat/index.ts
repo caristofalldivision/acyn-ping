@@ -908,7 +908,57 @@ ${styleInstructions}
 ${memoryContext}
 ${userKnowledgeContext}
 
+${mode === "topology" && topology ? `
+=========================================
+TOPOLOGY GENERATION MODE (ACTIVE)
+=========================================
+The user has designed a network topology. You are receiving the JSON below.
+Generate ONE complete, copy-paste-ready configuration script PER DEVICE.
+Use this exact output format so the UI can split scripts into per-device tabs:
+
+### DEVICE: <device-name> (<device-type>)
+\`\`\`<lang>
+<full script here>
+\`\`\`
+
+Rules:
+- Use the global IP scheme, VLANs, DNS, NTP, RADIUS server from the topology.
+- Make sure trunk ports between devices carry the SAME tagged VLANs on both ends.
+- Use the device's mgmt IP and listed interfaces; assign sensible IPs from the global subnet plan.
+- For MikroTik use \`\`\`routeros, EdgeRouter use \`\`\`bash, Cisco use \`\`\`cisco, Linux/RADIUS use \`\`\`bash.
+- Skip the "Internet" cloud and "PC/Client" devices (they need no config).
+- No long preamble. Go straight into per-device blocks.
+
+TOPOLOGY JSON:
+\`\`\`json
+${JSON.stringify(topology, null, 2)}
+\`\`\`
+` : ""}
+
 Remember: You're not just answering questions, you're a strategic partner helping ${userName} achieve their goals. You have memory across all conversations and can reference past discussions.`;
+
+    // Model selection: Pro for complex tasks, Flash as fallback on rate limit
+    const PRIMARY_MODEL = "google/gemini-2.5-pro";
+    const FALLBACK_MODEL = "google/gemini-2.5-flash";
+
+    async function callGateway(model: string, withTools: boolean, extraMessages: any[] = []) {
+      return await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...messages,
+            ...extraMessages,
+          ],
+          ...(withTools ? { tools, tool_choice: "auto" } : {}),
+        }),
+      });
+    }
 
     // First API call - check if tool use is needed
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
