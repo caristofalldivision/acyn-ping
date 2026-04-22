@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   ArrowLeft, Wifi, Server, Router, Globe, Shield, Terminal,
-  Copy, Check, ChevronRight, Zap, Network, MonitorSpeaker, CreditCard, Lock, Radio
+  Copy, Check, ChevronRight, Zap, Network, MonitorSpeaker, CreditCard, Lock, Radio, Workflow
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -17,6 +17,7 @@ interface ScriptGeneratorProps {
   onBack: () => void;
   onOpenSaved?: () => void;
   onOpenPortalBuilder?: () => void;
+  onOpenTopology?: () => void;
 }
 
 interface TemplateField {
@@ -253,6 +254,169 @@ I need BOTH sides configured:
 8. Make it persistent (survive reboots on both sides)
 
 Step by step. Start with Step 1.`
+  },
+
+  // === Ubiquiti / UniFi / EdgeRouter ===
+  {
+    id: "edgerouter-home",
+    title: "EdgeRouter Home/Office Setup",
+    description: "EdgeRouter PPPoE/DHCP WAN, LAN with DHCP server, NAT, firewall, port-forwards — full EdgeOS config",
+    icon: Router,
+    category: "Ubiquiti",
+    tools: ["SSH/PuTTY", "EdgeOS Web GUI"],
+    fields: [
+      { id: "model", label: "EdgeRouter Model", placeholder: "e.g., ER-X, ER-Lite, ER-4, ER-12", type: "text", required: true },
+      { id: "edgeos_version", label: "EdgeOS Version", placeholder: "e.g., 2.0.9-hotfix.7", type: "text", required: true, helpText: "show version" },
+      { id: "wan_type", label: "WAN Type", type: "select", placeholder: "", options: [
+        { value: "dhcp", label: "DHCP (cable/fiber)" },
+        { value: "pppoe", label: "PPPoE (DSL/some fiber)" },
+        { value: "static", label: "Static IP" },
+      ], required: true },
+      { id: "wan_iface", label: "WAN Interface", placeholder: "e.g., eth0", type: "text", required: true },
+      { id: "lan_iface", label: "LAN Interface", placeholder: "e.g., eth1 or switch0", type: "text", required: true },
+      { id: "lan_subnet", label: "LAN Subnet", placeholder: "e.g., 192.168.1.0/24", type: "text", required: true },
+      { id: "lan_gw", label: "LAN Gateway IP", placeholder: "e.g., 192.168.1.1", type: "text", required: true },
+      { id: "pppoe_user", label: "PPPoE User (if PPPoE)", placeholder: "e.g., user@isp", type: "text" },
+      { id: "pppoe_pass", label: "PPPoE Password (if PPPoE)", placeholder: "", type: "text" },
+      { id: "port_forwards", label: "Port Forwards (optional)", placeholder: "e.g.,\n8080 tcp -> 192.168.1.10:80\n22 tcp -> 192.168.1.20:22", type: "textarea" },
+      { id: "hwoffload", label: "Enable Hardware Offload?", type: "select", placeholder: "", options: [
+        { value: "yes", label: "Yes (faster, breaks some QoS)" },
+        { value: "no", label: "No (keep all features)" },
+      ]},
+    ],
+    promptBuilder: (v) => `Configure my Ubiquiti ${v.model} (EdgeOS ${v.edgeos_version}) for home/office use.
+
+WAN: ${v.wan_type} on ${v.wan_iface}
+LAN: ${v.lan_iface}, subnet ${v.lan_subnet}, gateway ${v.lan_gw}
+${v.wan_type === "pppoe" ? `PPPoE: ${v.pppoe_user} / ${v.pppoe_pass}` : ""}
+${v.port_forwards ? `Port forwards:\n${v.port_forwards}` : ""}
+Hardware offload: ${v.hwoffload || "yes"}
+
+Give me the FULL EdgeOS configure-mode commands in ONE bash code block:
+- WAN setup (${v.wan_type})
+- LAN with DHCP server (range last octet 100-200)
+- NAT masquerade
+- Firewall rule sets WAN_IN, WAN_LOCAL (default drop, allow established/related, ICMP)
+- ${v.port_forwards ? "Destination NAT for each port forward + matching firewall accept" : "No port forwards"}
+- ${v.hwoffload === "yes" ? "Enable HW offload (hwnat, ipsec, ipv4)" : "Skip HW offload"}
+- Final: commit ; save ; exit
+- Verification commands at the end (show interfaces, show dhcp leases, ping)`
+  },
+  {
+    id: "unifi-switch-vlan",
+    title: "UniFi Switch VLAN Configuration",
+    description: "Define VLANs as Networks + apply Switch Port Profiles via UniFi Controller (with config.gateway.json snippets)",
+    icon: Network,
+    category: "Ubiquiti",
+    tools: ["UniFi Controller", "SSH (fallback)"],
+    fields: [
+      { id: "controller_type", label: "Controller Type", type: "select", placeholder: "", options: [
+        { value: "self", label: "Self-hosted (Ubuntu)" },
+        { value: "cloudkey", label: "CloudKey / UDM" },
+        { value: "ui", label: "UI.com Cloud" },
+      ], required: true },
+      { id: "switch_model", label: "Switch Model", placeholder: "e.g., USW-24-PoE, USW-Lite-8-PoE, USW-Pro-48", type: "text", required: true },
+      { id: "vlans", label: "VLANs (id name subnet, one per line)", placeholder: "e.g.,\n10 Office 192.168.10.0/24\n20 Guest 192.168.20.0/24\n30 IoT 192.168.30.0/24\n99 Mgmt 192.168.99.0/24", type: "textarea", required: true },
+      { id: "trunk_ports", label: "Trunk Ports (carry all VLANs)", placeholder: "e.g., port 1, port 24", type: "text", required: true, helpText: "Usually uplink to router + downlinks to APs/other switches" },
+      { id: "access_ports", label: "Access Ports per VLAN", placeholder: "e.g.,\nports 2-12 = Office (vlan 10)\nports 13-18 = Guest (vlan 20)\nports 19-23 = IoT (vlan 30)", type: "textarea", required: true },
+      { id: "gateway_device", label: "Gateway Device", type: "select", placeholder: "", options: [
+        { value: "udm", label: "UDM / USG (config.gateway.json applies)" },
+        { value: "mikrotik", label: "MikroTik router (UniFi only handles L2)" },
+        { value: "edgerouter", label: "EdgeRouter" },
+      ]},
+    ],
+    promptBuilder: (v) => `Configure VLANs on my UniFi ${v.switch_model} via ${v.controller_type === "self" ? "self-hosted" : v.controller_type === "ui" ? "UI.com cloud" : "CloudKey/UDM"} controller.
+
+VLANs:
+${v.vlans}
+
+Trunk ports: ${v.trunk_ports}
+Access port assignments:
+${v.access_ports}
+Gateway: ${v.gateway_device || "udm"}
+
+Give me:
+1. EXACT controller GUI clickpath to create each VLAN as a Network (Settings > Networks > Create New).
+2. EXACT clickpath to create Switch Port Profiles (Settings > Profiles > Switch Ports) — one trunk profile + one access profile per VLAN.
+3. EXACT clickpath to apply profiles to ports (Devices > [switch] > Ports > [port] > Profile).
+4. ${v.gateway_device === "udm" ? "config.gateway.json snippet for any DHCP options or per-VLAN firewall rules the GUI doesn't expose." : v.gateway_device === "mikrotik" ? "Matching MikroTik bridge VLAN filtering config so trunk ports work end-to-end." : "Matching EdgeRouter VLAN sub-interface config so trunk ports work end-to-end."}
+5. Verification: how to check each port's effective VLAN in the controller and via SSH (\`info\` command).`
+  },
+  {
+    id: "unifi-guest-hotspot",
+    title: "UniFi Guest Hotspot with Payments",
+    description: "Captive portal with vouchers, PayPal/Stripe payment, allowlist (walled garden), bandwidth profiles per package",
+    icon: Wifi,
+    category: "Ubiquiti",
+    tools: ["UniFi Controller"],
+    fields: [
+      { id: "ssid", label: "Guest SSID", placeholder: "e.g., FastNet-Guest", type: "text", required: true },
+      { id: "guest_vlan", label: "Guest VLAN ID", placeholder: "e.g., 20", type: "text", required: true },
+      { id: "guest_subnet", label: "Guest Subnet", placeholder: "e.g., 192.168.20.0/24", type: "text", required: true },
+      { id: "auth_method", label: "Authentication Method", type: "select", placeholder: "", options: [
+        { value: "vouchers", label: "Vouchers (printable)" },
+        { value: "paypal", label: "PayPal payment" },
+        { value: "stripe", label: "Stripe payment" },
+        { value: "external", label: "External portal (custom)" },
+      ], required: true },
+      { id: "packages", label: "Packages (name duration price speed)", placeholder: "e.g.,\n1hr - 60min - $1 - 5/2 Mbps\n24hr - 1440min - $5 - 10/5 Mbps\nWeekly - 10080min - $20 - 20/10 Mbps", type: "textarea", required: true },
+      { id: "isp_name", label: "Business Name (shown on portal)", placeholder: "e.g., FastNet WiFi", type: "text", required: true },
+    ],
+    promptBuilder: (v) => `Set up a UniFi Guest Hotspot with payments on my controller.
+
+SSID: ${v.ssid} on VLAN ${v.guest_vlan} (subnet ${v.guest_subnet})
+Auth: ${v.auth_method}
+Business: ${v.isp_name}
+Packages:
+${v.packages}
+
+EXACT controller GUI steps:
+1. Create the guest Network (Settings > Networks) with VLAN ${v.guest_vlan} and DHCP.
+2. Create the guest WiFi (Settings > WiFi) with security Open + Guest portal toggle ON, attached to that Network.
+3. Configure Hotspot Manager (Settings > Hotspot):
+   - Authentication: ${v.auth_method}
+   ${v.auth_method === "paypal" ? "- PayPal: business email, currency, sandbox/live toggle" : v.auth_method === "stripe" ? "- Stripe: secret key + publishable key + webhook" : v.auth_method === "vouchers" ? "- Voucher generation steps" : "- External portal URL + secret"}
+4. Create User Groups for each package's bandwidth limit.
+5. Allowlist (walled garden) for payment domains: ${v.auth_method === "paypal" ? "*.paypal.com, *.paypalobjects.com" : v.auth_method === "stripe" ? "*.stripe.com, js.stripe.com, api.stripe.com, checkout.stripe.com" : "your portal domain"}
+6. Customize portal landing (logo, business name "${v.isp_name}", language).
+7. ${v.auth_method === "vouchers" ? "Show voucher generation workflow per package." : "Test transaction flow."}
+8. Verification: connect a test device, complete payment, confirm bandwidth profile applies.`
+  },
+  {
+    id: "unifi-site-to-site",
+    title: "UniFi Site-to-Site VPN (Auto IPsec)",
+    description: "Connect two UniFi sites (UDM/USG) with one-click Auto IPsec, or manual IPsec for mixed-vendor",
+    icon: Lock,
+    category: "Ubiquiti",
+    tools: ["UniFi Controller (both sites)"],
+    fields: [
+      { id: "site_a_name", label: "Site A Name", placeholder: "e.g., HQ", type: "text", required: true },
+      { id: "site_a_subnet", label: "Site A LAN Subnet", placeholder: "e.g., 192.168.1.0/24", type: "text", required: true },
+      { id: "site_a_wan", label: "Site A WAN IP / FQDN", placeholder: "e.g., 41.x.x.x or hq.example.com", type: "text", required: true },
+      { id: "site_b_name", label: "Site B Name", placeholder: "e.g., Branch", type: "text", required: true },
+      { id: "site_b_subnet", label: "Site B LAN Subnet", placeholder: "e.g., 192.168.2.0/24", type: "text", required: true },
+      { id: "site_b_wan", label: "Site B WAN IP / FQDN", placeholder: "e.g., 41.y.y.y", type: "text", required: true },
+      { id: "vpn_type", label: "VPN Type", type: "select", placeholder: "", options: [
+        { value: "auto-ipsec", label: "Auto IPsec (UniFi-to-UniFi, easiest)" },
+        { value: "manual-ipsec", label: "Manual IPsec (mixed-vendor)" },
+      ], required: true },
+      { id: "psk", label: "Pre-Shared Key (Manual IPsec only)", placeholder: "e.g., AStrongPSK!2024", type: "text" },
+    ],
+    promptBuilder: (v) => `Set up a Site-to-Site VPN between my UniFi sites.
+
+Site A: ${v.site_a_name} (${v.site_a_subnet}) at ${v.site_a_wan}
+Site B: ${v.site_b_name} (${v.site_b_subnet}) at ${v.site_b_wan}
+Type: ${v.vpn_type}
+${v.vpn_type === "manual-ipsec" ? `PSK: ${v.psk}` : ""}
+
+EXACT clickpaths in BOTH controllers:
+${v.vpn_type === "auto-ipsec"
+  ? "1. Site A: Settings > Networks > Create > Site-to-Site VPN > Auto IPsec > pick Site B from dropdown.\n2. Site B: same — Auto IPsec back to Site A.\n3. UniFi auto-negotiates the tunnel."
+  : "1. Both sites: Settings > Networks > Create > Site-to-Site VPN > Manual IPsec.\n2. Fill peer WAN IP, remote subnet, PSK on each side (mirror).\n3. Encryption: AES-256, SHA256, DH group 14, PFS on, lifetime 28800/3600."}
+4. Firewall: confirm allow rules for tunneled traffic between subnets.
+5. Routing: should be auto; verify static routes if needed.
+6. Verification: ping a Site B host from Site A and vice versa, check tunnel status in Settings > Networks.
+7. Troubleshooting: log location, common PSK/encryption mismatches.`
   },
 
   // === EXISTING TEMPLATES (reordered) ===
@@ -498,9 +662,9 @@ Complete copy-paste scripts for every device. Tell me which tools to use. ${v.ex
   },
 ];
 
-const categories = ["All", "ISP Business", "MikroTik", "Cisco", "VPN", "Server", "TP-Link", "Remote Access", "Custom"];
+const categories = ["All", "ISP Business", "MikroTik", "Ubiquiti", "Cisco", "VPN", "Server", "TP-Link", "Remote Access", "Custom"];
 
-export const ScriptGenerator = ({ onSendToChat, onBack, onOpenSaved, onOpenPortalBuilder }: ScriptGeneratorProps) => {
+export const ScriptGenerator = ({ onSendToChat, onBack, onOpenSaved, onOpenPortalBuilder, onOpenTopology }: ScriptGeneratorProps) => {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
@@ -564,6 +728,11 @@ export const ScriptGenerator = ({ onSendToChat, onBack, onOpenSaved, onOpenPorta
             {onOpenPortalBuilder && (
               <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={onOpenPortalBuilder}>
                 <Globe className="w-3 h-3" /> Portal Builder
+              </Button>
+            )}
+            {onOpenTopology && (
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={onOpenTopology}>
+                <Workflow className="w-3 h-3" /> Topology Builder
               </Button>
             )}
           </div>
