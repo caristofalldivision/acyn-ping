@@ -155,7 +155,7 @@ serve(async (req) => {
     const { createClient } = await import("npm:@supabase/supabase-js@2");
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { messages, userKnowledge, conversationId, userId } = await req.json();
+    const { messages, userKnowledge, conversationId, userId, mode, topology } = await req.json();
     
     // Real-time style learning - detect feedback patterns
     if (userId && messages && messages.length > 0) {
