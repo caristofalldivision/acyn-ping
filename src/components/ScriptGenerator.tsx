@@ -662,9 +662,9 @@ Complete copy-paste scripts for every device. Tell me which tools to use. ${v.ex
   },
 ];
 
-const categories = ["All", "ISP Business", "MikroTik", "Cisco", "VPN", "Server", "TP-Link", "Remote Access", "Custom"];
+const categories = ["All", "ISP Business", "MikroTik", "Ubiquiti", "Cisco", "VPN", "Server", "TP-Link", "Remote Access", "Custom"];
 
-export const ScriptGenerator = ({ onSendToChat, onBack, onOpenSaved, onOpenPortalBuilder }: ScriptGeneratorProps) => {
+export const ScriptGenerator = ({ onSendToChat, onBack, onOpenSaved, onOpenPortalBuilder, onOpenTopology }: ScriptGeneratorProps) => {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
@@ -728,6 +728,11 @@ export const ScriptGenerator = ({ onSendToChat, onBack, onOpenSaved, onOpenPorta
             {onOpenPortalBuilder && (
               <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={onOpenPortalBuilder}>
                 <Globe className="w-3 h-3" /> Portal Builder
+              </Button>
+            )}
+            {onOpenTopology && (
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={onOpenTopology}>
+                <Workflow className="w-3 h-3" /> Topology Builder
               </Button>
             )}
           </div>
