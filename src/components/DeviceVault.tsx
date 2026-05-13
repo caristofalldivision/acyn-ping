@@ -1,0 +1,282 @@
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft, Plus, Router as RouterIcon, Wifi, RefreshCw, Trash2, Terminal, Download } from "lucide-react";
+
+interface DeviceVaultProps {
+  onBack: () => void;
+}
+
+interface Device {
+  id: string;
+  name: string;
+  vendor: string;
+  model: string | null;
+  host: string | null;
+  connection_method: string;
+  last_connected_at: string | null;
+  status: string;
+}
+
+export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const { toast } = useToast();
+
+  const load = async () => {
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setLoading(false); return; }
+    const { data, error } = await supabase
+      .from("devices" as any)
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+    if (!error && data) setDevices(data as any);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const remove = async (id: string) => {
+    const { error } = await supabase.from("devices" as any).delete().eq("id", id);
+    if (error) toast({ title: "Failed to delete", variant: "destructive" });
+    else { toast({ title: "Device removed" }); load(); }
+  };
+
+  if (showAdd) return <AddDevice onBack={() => { setShowAdd(false); load(); }} />;
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden bg-background">
+      <header className="flex-shrink-0 flex items-center gap-3 p-3 md:p-4 border-b border-border">
+        <Button variant="ghost" size="icon" onClick={onBack} className="h-8 w-8">
+          <ArrowLeft className="w-4 h-4" />
+        </Button>
+        <div className="flex-1">
+          <h1 className="text-base md:text-lg font-semibold">Device Vault</h1>
+          <p className="text-[11px] md:text-xs text-muted-foreground">Connect and remotely configure your routers</p>
+        </div>
+        <Button size="sm" onClick={() => setShowAdd(true)} className="h-8 gap-1.5">
+          <Plus className="w-4 h-4" /> Add Router
+        </Button>
+      </header>
+
+      <div className="flex-1 overflow-y-auto p-3 md:p-6">
+        {loading ? (
+          <p className="text-sm text-muted-foreground text-center py-12">Loading devices…</p>
+        ) : devices.length === 0 ? (
+          <div className="max-w-lg mx-auto text-center py-12 space-y-4">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center">
+              <RouterIcon className="w-8 h-8 text-primary" />
+            </div>
+            <h2 className="text-lg font-semibold">No routers connected yet</h2>
+            <p className="text-sm text-muted-foreground">
+              Install the Topha Agent on a machine on your LAN, pair it with a one-time code, and then
+              Topha can fetch configs and run setup wizards on your MikroTik routers — even behind CGNAT.
+            </p>
+            <Button onClick={() => setShowAdd(true)} className="gap-1.5">
+              <Plus className="w-4 h-4" /> Add your first router
+            </Button>
+          </div>
+        ) : (
+          <div className="max-w-3xl mx-auto space-y-2">
+            {devices.map(d => (
+              <div key={d.id} className="rounded-xl border border-border bg-card p-3 md:p-4 flex flex-col md:flex-row gap-3 md:items-center">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <RouterIcon className="w-5 h-5 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm font-medium truncate">{d.name}</h3>
+                      <Badge variant="outline" className="text-[10px] uppercase">{d.vendor}</Badge>
+                      <Badge variant={d.status === "online" ? "default" : "secondary"} className="text-[10px]">{d.status}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {d.model || "Unknown model"} · {d.host || "—"} · via {d.connection_method.toUpperCase()}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-1.5 flex-wrap">
+                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" disabled>
+                    <Download className="w-3 h-3" /> Fetch Config
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" disabled>
+                    <Wifi className="w-3 h-3" /> Hotspot Wizard
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-8 text-xs gap-1.5" disabled>
+                    <Terminal className="w-3 h-3" /> Jobs
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive" onClick={() => remove(d.id)}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <p className="text-[11px] text-muted-foreground text-center pt-4">
+              Actions become live once your Topha Agent reports the device as online.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const AddDevice = ({ onBack }: { onBack: () => void }) => {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [pairingCode, setPairingCode] = useState("");
+  const [name, setName] = useState("");
+  const [host, setHost] = useState("");
+  const [vendor, setVendor] = useState("mikrotik");
+  const [method, setMethod] = useState("rest");
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  const generateCode = () => {
+    const code = Array.from({ length: 6 }, () =>
+      "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]
+    ).join("");
+    setPairingCode(code);
+    setStep(2);
+  };
+
+  const save = async () => {
+    if (!name || !host) {
+      toast({ title: "Name and host required", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSaving(false); return; }
+    const { error } = await supabase.from("devices" as any).insert({
+      user_id: user.id,
+      name,
+      vendor,
+      host,
+      connection_method: method,
+      username,
+      credential_encrypted: password, // TODO: encrypt server-side via edge function
+      port: method === "rest" ? 443 : method === "ssh" ? 22 : 8728,
+      status: "pending",
+    });
+    setSaving(false);
+    if (error) toast({ title: "Failed to save", description: error.message, variant: "destructive" });
+    else { toast({ title: "Router added" }); onBack(); }
+  };
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden bg-background">
+      <header className="flex-shrink-0 flex items-center gap-3 p-3 md:p-4 border-b border-border">
+        <Button variant="ghost" size="icon" onClick={onBack} className="h-8 w-8">
+          <ArrowLeft className="w-4 h-4" />
+        </Button>
+        <h1 className="text-base md:text-lg font-semibold">Add Router</h1>
+        <span className="text-xs text-muted-foreground ml-auto">Step {step} of 3</span>
+      </header>
+
+      <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="max-w-xl mx-auto space-y-6">
+          {step === 1 && (
+            <>
+              <div>
+                <h2 className="text-base font-semibold mb-2">1. Install the Topha Agent</h2>
+                <p className="text-sm text-muted-foreground mb-3">
+                  The agent is a small program that runs on a machine on the same LAN as your router
+                  (an Ubuntu server, a Windows PC, or even directly on RouterOS as a container).
+                  It dials out to Topha so we never need your router's public IP.
+                </p>
+                <div className="rounded-lg border border-border bg-card p-3 space-y-2 text-xs font-mono">
+                  <p className="text-muted-foreground"># Linux / macOS</p>
+                  <code className="block">curl -fsSL https://topha.lovable.app/agent/install.sh | sh</code>
+                  <p className="text-muted-foreground mt-3"># Windows (PowerShell)</p>
+                  <code className="block">iwr -useb https://topha.lovable.app/agent/install.ps1 | iex</code>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-2">
+                  The agent binary is ~5 MB. It supports REST API (RouterOS v7.1+), legacy API (v6+) and SSH.
+                </p>
+              </div>
+              <Button onClick={generateCode} className="w-full">I've installed it — generate pairing code</Button>
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              <div>
+                <h2 className="text-base font-semibold mb-2">2. Pair the agent</h2>
+                <p className="text-sm text-muted-foreground mb-3">
+                  On the machine where you installed the agent, run this command. The code expires in 10 minutes.
+                </p>
+                <div className="rounded-lg border border-border bg-card p-4 text-center">
+                  <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-2">Pairing code</p>
+                  <p className="text-3xl font-mono font-bold tracking-widest text-primary">{pairingCode}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-card p-3 mt-3 font-mono text-xs">
+                  <code>topha-agent pair {pairingCode}</code>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setStep(1)} className="flex-1">Back</Button>
+                <Button onClick={() => setStep(3)} className="flex-1">Next: add router</Button>
+              </div>
+            </>
+          )}
+
+          {step === 3 && (
+            <>
+              <div className="space-y-3">
+                <h2 className="text-base font-semibold">3. Router details</h2>
+                <Field label="Friendly name">
+                  <input value={name} onChange={e => setName(e.target.value)} placeholder="Office MikroTik" className="input-base" />
+                </Field>
+                <Field label="Vendor">
+                  <select value={vendor} onChange={e => setVendor(e.target.value)} className="input-base">
+                    <option value="mikrotik">MikroTik</option>
+                    <option value="cisco" disabled>Cisco (coming soon)</option>
+                    <option value="ubiquiti" disabled>Ubiquiti (coming soon)</option>
+                  </select>
+                </Field>
+                <Field label="LAN IP / hostname (as the agent sees it)">
+                  <input value={host} onChange={e => setHost(e.target.value)} placeholder="192.168.88.1" className="input-base" />
+                </Field>
+                <Field label="Connection method">
+                  <select value={method} onChange={e => setMethod(e.target.value)} className="input-base">
+                    <option value="rest">REST API (RouterOS v7.1+)</option>
+                    <option value="api">Legacy API (v6 + v7)</option>
+                    <option value="ssh">SSH</option>
+                  </select>
+                </Field>
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Username">
+                    <input value={username} onChange={e => setUsername(e.target.value)} className="input-base" />
+                  </Field>
+                  <Field label="Password">
+                    <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="input-base" />
+                  </Field>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setStep(2)} className="flex-1">Back</Button>
+                <Button onClick={save} disabled={saving} className="flex-1">
+                  {saving ? "Saving…" : "Save router"}
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <label className="block">
+    <span className="text-xs text-muted-foreground mb-1 block">{label}</span>
+    {children}
+  </label>
+);
