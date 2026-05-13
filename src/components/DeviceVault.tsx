@@ -232,20 +232,20 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
               <div className="space-y-3">
                 <h2 className="text-base font-semibold">3. Router details</h2>
                 <Field label="Friendly name">
-                  <input value={name} onChange={e => setName(e.target.value)} placeholder="Office MikroTik" className="input-base" />
+                  <input value={name} onChange={e => setName(e.target.value)} placeholder="Office MikroTik" className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
                 </Field>
                 <Field label="Vendor">
-                  <select value={vendor} onChange={e => setVendor(e.target.value)} className="input-base">
+                  <select value={vendor} onChange={e => setVendor(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
                     <option value="mikrotik">MikroTik</option>
                     <option value="cisco" disabled>Cisco (coming soon)</option>
                     <option value="ubiquiti" disabled>Ubiquiti (coming soon)</option>
                   </select>
                 </Field>
                 <Field label="LAN IP / hostname (as the agent sees it)">
-                  <input value={host} onChange={e => setHost(e.target.value)} placeholder="192.168.88.1" className="input-base" />
+                  <input value={host} onChange={e => setHost(e.target.value)} placeholder="192.168.88.1" className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
                 </Field>
                 <Field label="Connection method">
-                  <select value={method} onChange={e => setMethod(e.target.value)} className="input-base">
+                  <select value={method} onChange={e => setMethod(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
                     <option value="rest">REST API (RouterOS v7.1+)</option>
                     <option value="api">Legacy API (v6 + v7)</option>
                     <option value="ssh">SSH</option>
@@ -253,10 +253,10 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
                 </Field>
                 <div className="grid grid-cols-2 gap-2">
                   <Field label="Username">
-                    <input value={username} onChange={e => setUsername(e.target.value)} className="input-base" />
+                    <input value={username} onChange={e => setUsername(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
                   </Field>
                   <Field label="Password">
-                    <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="input-base" />
+                    <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
                   </Field>
                 </div>
               </div>
