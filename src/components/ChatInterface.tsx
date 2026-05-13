@@ -10,6 +10,8 @@ import { DownloadButton } from "./DownloadButton";
 import { ScriptGenerator } from "./ScriptGenerator";
 import { SavedScripts } from "./SavedScripts";
 import { CaptivePortalBuilder } from "./CaptivePortalBuilder";
+import { TopologyBuilder } from "./TopologyBuilder";
+import { DeviceVault } from "./DeviceVault";
 
 interface Message {
   role: "user" | "assistant";
