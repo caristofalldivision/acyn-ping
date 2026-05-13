@@ -119,6 +119,14 @@ export const ChatInterface = ({
       setShowPortalBuilder(true);
       return;
     }
+    if (messageContent === "__OPEN_TOPOLOGY__") {
+      setShowTopology(true);
+      return;
+    }
+    if (messageContent === "__OPEN_DEVICES__") {
+      setShowDevices(true);
+      return;
+    }
     if (!messageContent.trim() || loading || !conversationId) return;
     const userMessage: Message = { role: "user", content: messageContent };
     setMessages(prev => [...prev, userMessage]);
