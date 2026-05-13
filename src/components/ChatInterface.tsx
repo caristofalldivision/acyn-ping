@@ -267,7 +267,7 @@ export const ChatInterface = ({
                 <p className="text-lg text-muted-foreground mt-2">What can I help with?</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {suggestions.map((s) => (
                   <button
                     key={s.label}
