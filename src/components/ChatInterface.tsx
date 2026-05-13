@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Bot, User, ArrowDown, Paperclip, FileText, Lightbulb, Terminal, Wifi, Save, Layout } from "lucide-react";
+import { Send, Bot, User, ArrowDown, Paperclip, FileText, Lightbulb, Terminal, Wifi, Save, Layout, Workflow, Router } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { DownloadButton } from "./DownloadButton";
