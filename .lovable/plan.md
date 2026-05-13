@@ -1,80 +1,123 @@
+## Part 1 — Finish wiring TopologyBuilder (small, do first)
 
+Four edits to `src/components/ChatInterface.tsx`:
 
-# UniFi Knowledge, Topology Builder & Smarter Scripting
+1. Add import: `TopologyBuilder` and `Workflow` icon from lucide-react.
+2. Add a 5th suggestion chip: `{ icon: Workflow, label: "Design my network", prompt: "__OPEN_TOPOLOGY__" }`. Switch the empty-state grid to `grid-cols-2 md:grid-cols-3` so 5 chips wrap cleanly on mobile.
+3. Add `const [showTopology, setShowTopology] = useState(false);`, handle `__OPEN_TOPOLOGY__` in `sendMessage`, and add a render block that returns `<TopologyBuilder onBack={() => setShowTopology(false)} />` when active.
+4. Pass `onOpenTopology={() => { setShowScriptGenerator(false); setShowTopology(true); }}` into `<ScriptGenerator>` (the prop already exists on that component).
 
-Three improvements grouped together:
+No other files change. Ship this independently — it's safe and self-contained.
 
-## 1. Fix the AI's scripting weakness (highest impact)
+---
 
-The current chat function uses Gemini 2.5 Flash with a 400-line system prompt that forces step-by-step delivery on every request. That's why simple asks like "give me a walled garden script" come back as a 4-step interrogation instead of a script.
+## Part 2 — Remote Device Agent (Phase 1: MikroTik only)
 
-**Changes to `supabase/functions/chat/index.ts`:**
+Goal: an ISP saves a router in Topha, clicks **Set up hotspot**, Topha runs the wizard end-to-end on the real router, with a confirm step before each write and automatic rollback on failure.
 
-- **Upgrade model** from `google/gemini-2.5-flash` to `google/gemini-2.5-pro` for chat (better at long-context technical reasoning and producing accurate, complete scripts). Keep Flash as fallback if Pro is rate-limited.
-- **Refactor delivery rules** so step-by-step is opt-in, not mandatory:
-  - If the user asks a small/specific thing ("walled garden for M-Pesa", "block YouTube", "show me the firewall rules") → answer with the complete script in one message, no interrogation.
-  - Step-by-step mode only triggers for complete end-to-end builds (full hotspot, full PPPoE ISP, full RADIUS server) OR when the user explicitly asks "walk me through it".
-  - Add explicit examples in the prompt of "give immediate full answer" vs "use step-by-step" cases.
-- **Add ready-made script library** to the system prompt - copy-paste blocks the AI can lift directly when asked common things:
-  - Walled garden: M-Pesa, Stripe, PayPal, Airtel Money, Flutterwave (full domain lists)
-  - Hotspot end-to-end: one-shot script using `/ip hotspot setup` style commands
-  - Block social media / streaming / adult content via Layer7 + DNS
-  - PPPoE server one-shot
-  - Common firewall hardening one-shot
-  - DHCP server one-shot
-  - WiFi setup one-shot (v6 wireless + v7 wifi)
-- **Smart-defaults rule**: when the user gives partial info, the AI should use clearly-labelled placeholders (`<YOUR_WAN_INTERFACE>` etc.) and a one-line "replace these:" callout instead of refusing to answer until every field is filled. Only ask if truly ambiguous (router model affects syntax).
-- **Tighten honesty rule**: still no fabricated facts, but stop blocking responses behind "what's your version" when v6/v7 syntax differences are minor — provide both inline.
+### Architecture
 
-## 2. Ubiquiti / UniFi expertise
+```text
+Browser (Topha UI)
+   │  HTTPS
+   ▼
+Supabase Edge Function: device-agent-bridge
+   │  WebSocket (outbound from agent)
+   ▼
+Topha Agent (small Go binary on ISP's LAN)
+   │  REST / API / SSH (loopback or LAN)
+   ▼
+MikroTik Router
+```
 
-Add a new section to the system prompt (`supabase/functions/chat/index.ts`):
+Why an outbound-from-agent WebSocket: routers behind CGNAT/NAT are unreachable from the cloud. The agent dials out to Topha, holds the socket open, and the edge function forwards commands over it. The edge function never needs the router's public IP.
 
-- **EdgeRouter (EdgeOS, Vyatta-based):** `configure` mode, `set/delete/commit/save`, `show configuration`, interfaces eth0–ethN, firewall rule sets (in/out/local), NAT masquerade, DHCP server, hairpin NAT, PPPoE WAN, OSPF/BGP basics, common gotchas (`commit-confirm`, offloading hardware NAT/IPsec).
-- **UniFi Switches (USW):** managed via UniFi Network Controller (cloud or self-hosted), VLAN profiles, port profiles (Access/Trunk), tagged/untagged networks, link aggregation (LAG), PoE per-port control, jumbo frames, storm control, STP/RSTP, mirror ports. Also CLI fallback via SSH (`telnet localhost`, vyatta-style or busybox depending on model).
-- **UniFi APs (UAP/U6/U7):** SSID + WLAN groups, RADIUS profiles, dynamic VLAN, fast roaming (802.11r/k/v), band steering, minimum RSSI, broadcast filtering, guest portal with hotspot manager + payments (PayPal, Stripe, authorize.net), bandwidth profiles, adoption flow (`set-inform`, SSH `info`).
-- **UniFi Controller setup:** self-hosted on Ubuntu (`apt` repo), site management, backup/restore, controller migration, custom config via `config.gateway.json` for USG/UDM advanced rules.
-- **Common integration patterns:** UniFi APs + MikroTik router, UniFi switches + RouterOS, EdgeRouter + UniFi APs, hand-off scenarios.
-- **Ready-made scripts:** EdgeRouter PPPoE WAN + DHCP LAN, UniFi guest portal walled garden, UniFi RADIUS auth via FreeRADIUS, AP standalone provisioning when no controller.
+### Phase 1 scope
 
-Add new templates to `src/components/ScriptGenerator.tsx`:
-- **EdgeRouter Home/Office Setup** (PPPoE/DHCP WAN, LAN, firewall, port forward)
-- **UniFi Switch VLAN Configuration** (via controller JSON)
-- **UniFi Guest Hotspot with Payments**
-- **UniFi Site-to-Site VPN** (auto IPsec)
+In:
+- Device vault (saved routers per user, with credentials encrypted at rest).
+- Topha Agent v0.1 (Go) — single binary, installer for Linux/Windows/RouterOS container, supports REST API + legacy API + SSH, picks best available per device.
+- Pairing flow: user clicks "Add Router" → gets a one-time pairing code → runs `topha-agent pair <code>` on a machine on their LAN → agent registers itself and its reachable routers.
+- "Set up hotspot" wizard runs the existing AI hotspot script generator, then pushes via the agent in a transaction (export config first → apply → if any line fails, restore from export).
+- Live execution log streamed to the chat as the wizard runs.
+- Read-only "Fetch config" action on each saved device (proves the pipe end-to-end).
 
-## 3. Network Topology Diagram Builder
+Out (later phases):
+- Cisco devices (Phase 2 — same agent, adds IOS/IOS-XE driver).
+- Topology builder → push to real devices (Phase 3 — wires the existing TopologyBuilder to the agent).
+- Scheduled config backups, drift detection, multi-router rollouts.
 
-A new visual canvas where the user drags devices, draws links between them, fills basic per-device fields, and gets one auto-generated config bundle per device — all consistent (matching VLANs, IPs, trunk ports, etc.).
+### Database changes (one migration)
 
-**New component:** `src/components/TopologyBuilder.tsx`
+| Table | Purpose |
+|------|---------|
+| `device_agents` | One row per installed Topha Agent. Fields: `user_id`, `name`, `pairing_code`, `agent_secret_hash`, `last_seen_at`, `status`. |
+| `devices` | Saved routers. Fields: `user_id`, `agent_id` (FK), `name`, `vendor` (enum: mikrotik, cisco, ubiquiti), `model`, `routeros_version`, `connection_method` (rest/api/ssh), `host`, `port`, `username`, `credential_encrypted` (pgcrypto with secret-stored key), `last_connected_at`. |
+| `device_jobs` | Every push attempt. Fields: `user_id`, `device_id`, `kind` (fetch_config/apply_script/wizard_hotspot), `script_content`, `status` (pending/running/success/failed/rolled_back), `output_log`, `error`, `started_at`, `finished_at`. Powers the live log + history. |
 
-- **Canvas:** simple grid using HTML/SVG (no heavy library). Click-to-add devices from a palette: MikroTik Router, MikroTik Switch, Cisco Switch, UniFi Controller, UniFi AP, UniFi Switch, EdgeRouter, FreeRADIUS Server, MikroTik Hotspot, PCs/Clients, Internet cloud.
-- **Connect devices:** click one device's port, then another's port, to draw a link. Link gets a label (e.g., "trunk: VLAN 10,20" or "access: VLAN 30").
-- **Per-device side panel** (opens on click): name, model, mgmt IP, interfaces auto-listed from links, role-specific fields (e.g., for MikroTik: WAN iface, LAN iface, hotspot? PPPoE?; for UniFi AP: SSIDs, VLAN per SSID).
-- **Global settings panel:** ISP name, IP scheme (e.g., 10.10.0.0/16), VLAN list with names + subnets, DNS, NTP, RADIUS server IP if any.
-- **"Generate All Configs" button:** sends the topology JSON to the chat edge function with a special prompt that instructs the AI to return one labelled script per device, all consistent. Output displays as tabs (one tab per device) with copy / download .rsc / save buttons.
-- **Save topology:** stored as a saved_script with `category = 'topology'` and `form_values` = topology JSON, so the user can reload and edit later.
-- **Mobile responsive:** on small screens canvas becomes a vertical list view of devices + links instead of free-form drag.
+All RLS scoped to `auth.uid() = user_id`. Credentials encrypted with `pgp_sym_encrypt` using a server-side key from a new secret `DEVICE_CRED_KEY`.
 
-**Entry points:**
-- New button in `ScriptGenerator.tsx` header: "Topology Builder" alongside "Saved Scripts" and "Portal Builder".
-- Suggestion chip in `ChatInterface.tsx`: "Design my network".
+### Edge functions
 
-**No DB changes** — reuses the existing `saved_scripts` table.
+| Function | Purpose |
+|---|---|
+| `device-agent-bridge` | WebSocket endpoint. Agents connect with their `agent_secret`. Routes commands from the UI to the right agent and streams responses back. |
+| `device-jobs` | REST. UI calls this to enqueue a job (fetch config, apply script, run wizard). Inserts `device_jobs` row, pushes the job over the bridge, streams progress back via Supabase Realtime on `device_jobs`. |
+| `device-pair` | Generates pairing codes, validates agent registration, issues `agent_secret`. |
 
-## Files Modified
+The hotspot wizard is just a special `kind` on `device_jobs` — its `script_content` is built by reusing the existing `chat` function in a new `mode: "wizard_hotspot"` that returns a structured `{ steps: [{ description, commands, rollback_commands }] }` instead of free text. The agent runs steps in order and reports per-step status.
 
-| File | Change |
-|------|--------|
-| `supabase/functions/chat/index.ts` | Switch model to gemini-2.5-pro, refactor step-by-step rules to be opt-in, add ready-made script library, add full UniFi/EdgeRouter knowledge section, add topology-builder prompt mode |
-| `src/components/ScriptGenerator.tsx` | Add 4 UniFi/EdgeRouter templates, add Topology Builder button |
-| `src/components/TopologyBuilder.tsx` (NEW) | Visual topology canvas + per-device generator |
-| `src/components/ChatInterface.tsx` | Add "Design my network" suggestion chip |
+### Topha Agent (new repo asset, distributed as binary)
 
-## Why this fixes the scripting issue specifically
+Single Go binary, ~5 MB. Responsibilities:
+- Pair once with `topha-agent pair <code>` (stores secret in `~/.topha/agent.key`).
+- Maintain WebSocket to `device-agent-bridge`.
+- Handle commands: `discover`, `fetch_export`, `apply_script`, `take_backup`, `restore_backup`.
+- Drivers: `mikrotik-rest` (v7.1+), `mikrotik-api` (go-routeros lib, v6+), `mikrotik-ssh` (golang.org/x/crypto/ssh). Auto-pick: try REST → API → SSH.
+- Logs every command with redaction of passwords.
 
-Right now: user asks "walled garden for M-Pesa" → AI replies "What's your RouterOS version? What's your hotspot interface name? What model?" → user gives up.
+Distribution: download links + install instructions shown on the "Add Router" screen. Source lives outside this repo; the Lovable project just hosts the install instructions and the bridge.
 
-After: same question → AI replies with the full 8-line walled garden script (M-Pesa domains pre-loaded), with one note saying "this works on v6 and v7 — if your hotspot server isn't named `hotspot1`, change that one word." Done.
+### New UI
 
+- `src/components/DeviceVault.tsx` — list saved devices, "Add Router" flow, per-device actions (Fetch Config, Run Hotspot Wizard, View Job History).
+- `src/components/AddDeviceWizard.tsx` — agent install instructions → pairing code → device discovery → save.
+- `src/components/HotspotWizard.tsx` — collects hotspot params (interface, IP pool, payment method, voucher format), shows preview script, runs it via `device-jobs`, streams live log.
+- `src/components/JobLog.tsx` — reusable live log panel subscribed to a `device_jobs` row via Realtime.
+- `src/components/ChatInterface.tsx` — add 6th suggestion chip "Configure my router" that opens DeviceVault. Add an inline action on any AI-generated script in chat: "Push to device →" that opens device picker and runs it as a job.
+- `src/components/ScriptGenerator.tsx` — add "Push to device" button alongside Save Script.
+
+### Safety rules baked in
+
+- Every apply takes a `/system backup save` and `/export` first; rollback = restore the backup.
+- Wizard steps run inside `/system scheduler` `safe-mode`-style guard: each step has explicit rollback commands the agent runs on failure.
+- Mandatory user confirmation in the UI before any write step. Read steps run without confirm.
+- Hard-stop if connectivity to the router drops mid-apply (agent waits 60s, then triggers rollback via the backup).
+
+### Files modified / created
+
+**Modified**
+- `src/components/ChatInterface.tsx` — Part 1 wiring + Part 2 chip + push-to-device action
+- `src/components/ScriptGenerator.tsx` — push-to-device button
+- `supabase/functions/chat/index.ts` — add `mode: "wizard_hotspot"` structured output
+
+**Created**
+- `supabase/functions/device-agent-bridge/index.ts`
+- `supabase/functions/device-jobs/index.ts`
+- `supabase/functions/device-pair/index.ts`
+- `src/components/DeviceVault.tsx`
+- `src/components/AddDeviceWizard.tsx`
+- `src/components/HotspotWizard.tsx`
+- `src/components/JobLog.tsx`
+- `supabase/migrations/<timestamp>_device_vault.sql`
+
+**New secret to add**: `DEVICE_CRED_KEY` (32-byte random, used by pgcrypto).
+
+### Suggested execution order
+
+1. Ship Part 1 (TopologyBuilder wiring) — 5 minutes, zero risk.
+2. Migration + `device-pair` + `device-agent-bridge` skeleton + DeviceVault UI with mocked agent (so the UX is testable without the binary).
+3. Build the Go agent v0.1 (REST driver only first), publish download.
+4. Wire Fetch Config end-to-end on a real MikroTik. Validate.
+5. Add Hotspot Wizard with structured AI output + rollback.
+6. Phase 2 (Cisco) and Phase 3 (Topology push) as follow-up plans.
