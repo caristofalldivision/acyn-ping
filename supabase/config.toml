@@ -17,3 +17,12 @@ verify_jwt = false
 
 [functions.manage-calendar]
 verify_jwt = false
+
+[functions.device-pair]
+verify_jwt = false
+
+[functions.device-agent-bridge]
+verify_jwt = false
+
+[functions.device-jobs]
+verify_jwt = false

@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Router as RouterIcon, Wifi, RefreshCw, Trash2, Terminal, Download } from "lucide-react";
+import { ArrowLeft, Plus, Router as RouterIcon, Wifi, Trash2, Terminal, Download } from "lucide-react";
+import { JobLog } from "./JobLog";
 
 interface DeviceVaultProps {
   onBack: () => void;
@@ -18,12 +19,14 @@ interface Device {
   connection_method: string;
   last_connected_at: string | null;
   status: string;
+  agent_id: string | null;
 }
 
 export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const load = async () => {
@@ -47,6 +50,21 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
     else { toast({ title: "Device removed" }); load(); }
   };
 
+  const runJob = async (device: Device, kind: "fetch_config") => {
+    if (!device.agent_id) {
+      toast({ title: "No agent paired", description: "Add a router via the wizard first.", variant: "destructive" });
+      return;
+    }
+    const { data, error } = await supabase.functions.invoke("device-jobs", {
+      body: { device_id: device.id, kind },
+    });
+    if (error || !data?.job_id) {
+      toast({ title: "Failed to enqueue", description: error?.message, variant: "destructive" });
+      return;
+    }
+    setActiveJobId(data.job_id);
+  };
+
   if (showAdd) return <AddDevice onBack={() => { setShowAdd(false); load(); }} />;
 
   return (
@@ -65,6 +83,11 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
       </header>
 
       <div className="flex-1 overflow-y-auto p-3 md:p-6">
+        {activeJobId && (
+          <div className="max-w-3xl mx-auto mb-4">
+            <JobLog jobId={activeJobId} onClose={() => setActiveJobId(null)} />
+          </div>
+        )}
         {loading ? (
           <p className="text-sm text-muted-foreground text-center py-12">Loading devices…</p>
         ) : devices.length === 0 ? (
@@ -101,10 +124,10 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
                   </div>
                 </div>
                 <div className="flex gap-1.5 flex-wrap">
-                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" disabled>
+                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => runJob(d, "fetch_config")}>
                     <Download className="w-3 h-3" /> Fetch Config
                   </Button>
-                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" disabled>
+                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" disabled title="Coming next">
                     <Wifi className="w-3 h-3" /> Hotspot Wizard
                   </Button>
                   <Button size="sm" variant="ghost" className="h-8 text-xs gap-1.5" disabled>
@@ -117,7 +140,7 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
               </div>
             ))}
             <p className="text-[11px] text-muted-foreground text-center pt-4">
-              Actions become live once your Topha Agent reports the device as online.
+              Actions are queued and picked up by your Topha Agent on its next poll (within ~5 seconds).
             </p>
           </div>
         )}
@@ -129,6 +152,8 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
 const AddDevice = ({ onBack }: { onBack: () => void }) => {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [pairingCode, setPairingCode] = useState("");
+  const [agentId, setAgentId] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
   const [name, setName] = useState("");
   const [host, setHost] = useState("");
   const [vendor, setVendor] = useState("mikrotik");
@@ -138,11 +163,16 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
-  const generateCode = () => {
-    const code = Array.from({ length: 6 }, () =>
-      "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]
-    ).join("");
-    setPairingCode(code);
+  const generateCode = async () => {
+    setGenerating(true);
+    const { data, error } = await supabase.functions.invoke("device-pair", { body: {} });
+    setGenerating(false);
+    if (error || !data?.pairing_code) {
+      toast({ title: "Failed to generate code", description: error?.message, variant: "destructive" });
+      return;
+    }
+    setPairingCode(data.pairing_code);
+    setAgentId(data.agent_id);
     setStep(2);
   };
 
@@ -156,12 +186,13 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
     if (!user) { setSaving(false); return; }
     const { error } = await supabase.from("devices" as any).insert({
       user_id: user.id,
+      agent_id: agentId,
       name,
       vendor,
       host,
       connection_method: method,
       username,
-      credential_encrypted: password, // TODO: encrypt server-side via edge function
+      credential_encrypted: password, // TODO: encrypt at rest via pgcrypto in a follow-up
       port: method === "rest" ? 443 : method === "ssh" ? 22 : 8728,
       status: "pending",
     });
@@ -169,6 +200,8 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
     if (error) toast({ title: "Failed to save", description: error.message, variant: "destructive" });
     else { toast({ title: "Router added" }); onBack(); }
   };
+
+  const inp = "w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40";
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
@@ -187,21 +220,22 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
               <div>
                 <h2 className="text-base font-semibold mb-2">1. Install the Topha Agent</h2>
                 <p className="text-sm text-muted-foreground mb-3">
-                  The agent is a small program that runs on a machine on the same LAN as your router
-                  (an Ubuntu server, a Windows PC, or even directly on RouterOS as a container).
-                  It dials out to Topha so we never need your router's public IP.
+                  The agent is a small program (~5 MB) that runs on a machine on the same LAN as your router.
+                  It dials out to Topha so we never need your router's public IP — works behind CGNAT.
                 </p>
                 <div className="rounded-lg border border-border bg-card p-3 space-y-2 text-xs font-mono">
                   <p className="text-muted-foreground"># Linux / macOS</p>
-                  <code className="block">curl -fsSL https://topha.lovable.app/agent/install.sh | sh</code>
+                  <code className="block break-all">curl -fsSL https://topha.lovable.app/agent/install.sh | sh</code>
                   <p className="text-muted-foreground mt-3"># Windows (PowerShell)</p>
-                  <code className="block">iwr -useb https://topha.lovable.app/agent/install.ps1 | iex</code>
+                  <code className="block break-all">iwr -useb https://topha.lovable.app/agent/install.ps1 | iex</code>
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-2">
-                  The agent binary is ~5 MB. It supports REST API (RouterOS v7.1+), legacy API (v6+) and SSH.
+                  Supports REST API (RouterOS v7.1+), legacy API (v6+) and SSH.
                 </p>
               </div>
-              <Button onClick={generateCode} className="w-full">I've installed it — generate pairing code</Button>
+              <Button onClick={generateCode} disabled={generating} className="w-full">
+                {generating ? "Generating…" : "I've installed it — generate pairing code"}
+              </Button>
             </>
           )}
 
@@ -232,20 +266,20 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
               <div className="space-y-3">
                 <h2 className="text-base font-semibold">3. Router details</h2>
                 <Field label="Friendly name">
-                  <input value={name} onChange={e => setName(e.target.value)} placeholder="Office MikroTik" className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                  <input value={name} onChange={e => setName(e.target.value)} placeholder="Office MikroTik" className={inp} />
                 </Field>
                 <Field label="Vendor">
-                  <select value={vendor} onChange={e => setVendor(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                  <select value={vendor} onChange={e => setVendor(e.target.value)} className={inp}>
                     <option value="mikrotik">MikroTik</option>
                     <option value="cisco" disabled>Cisco (coming soon)</option>
                     <option value="ubiquiti" disabled>Ubiquiti (coming soon)</option>
                   </select>
                 </Field>
                 <Field label="LAN IP / hostname (as the agent sees it)">
-                  <input value={host} onChange={e => setHost(e.target.value)} placeholder="192.168.88.1" className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                  <input value={host} onChange={e => setHost(e.target.value)} placeholder="192.168.88.1" className={inp} />
                 </Field>
                 <Field label="Connection method">
-                  <select value={method} onChange={e => setMethod(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                  <select value={method} onChange={e => setMethod(e.target.value)} className={inp}>
                     <option value="rest">REST API (RouterOS v7.1+)</option>
                     <option value="api">Legacy API (v6 + v7)</option>
                     <option value="ssh">SSH</option>
@@ -253,10 +287,10 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
                 </Field>
                 <div className="grid grid-cols-2 gap-2">
                   <Field label="Username">
-                    <input value={username} onChange={e => setUsername(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                    <input value={username} onChange={e => setUsername(e.target.value)} className={inp} />
                   </Field>
                   <Field label="Password">
-                    <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                    <input type="password" value={password} onChange={e => setPassword(e.target.value)} className={inp} />
                   </Field>
                 </div>
               </div>
