@@ -3,13 +3,15 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Bot, User, ArrowDown, Paperclip, FileText, Lightbulb, Terminal, Wifi, Save, Layout } from "lucide-react";
+import { Send, Bot, User, ArrowDown, Paperclip, FileText, Lightbulb, Terminal, Wifi, Save, Layout, Workflow, Router } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { DownloadButton } from "./DownloadButton";
 import { ScriptGenerator } from "./ScriptGenerator";
 import { SavedScripts } from "./SavedScripts";
 import { CaptivePortalBuilder } from "./CaptivePortalBuilder";
+import { TopologyBuilder } from "./TopologyBuilder";
+import { DeviceVault } from "./DeviceVault";
 
 interface Message {
   role: "user" | "assistant";
@@ -26,6 +28,8 @@ interface ChatInterfaceProps {
 const suggestions = [
   { icon: Terminal, label: "Generate config scripts", prompt: "__OPEN_SCRIPTS__" },
   { icon: Layout, label: "Captive Portal Builder", prompt: "__OPEN_PORTAL__" },
+  { icon: Workflow, label: "Design my network", prompt: "__OPEN_TOPOLOGY__" },
+  { icon: Router, label: "Configure my router", prompt: "__OPEN_DEVICES__" },
   { icon: Wifi, label: "Setup a hotspot", prompt: "Help me set up a MikroTik hotspot from scratch. Ask me about my device model and RouterOS version first." },
   { icon: Lightbulb, label: "Brainstorm ideas", prompt: "Help me brainstorm ideas" },
 ];
@@ -43,6 +47,8 @@ export const ChatInterface = ({
   const [showScriptGenerator, setShowScriptGenerator] = useState(false);
   const [showSavedScripts, setShowSavedScripts] = useState(false);
   const [showPortalBuilder, setShowPortalBuilder] = useState(false);
+  const [showTopology, setShowTopology] = useState(false);
+  const [showDevices, setShowDevices] = useState(false);
   const [savingMessageIdx, setSavingMessageIdx] = useState<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -111,6 +117,14 @@ export const ChatInterface = ({
     }
     if (messageContent === "__OPEN_PORTAL__") {
       setShowPortalBuilder(true);
+      return;
+    }
+    if (messageContent === "__OPEN_TOPOLOGY__") {
+      setShowTopology(true);
+      return;
+    }
+    if (messageContent === "__OPEN_DEVICES__") {
+      setShowDevices(true);
       return;
     }
     if (!messageContent.trim() || loading || !conversationId) return;
@@ -207,6 +221,22 @@ export const ChatInterface = ({
     );
   }
 
+  if (showTopology) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <TopologyBuilder onBack={() => setShowTopology(false)} />
+      </div>
+    );
+  }
+
+  if (showDevices) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <DeviceVault onBack={() => setShowDevices(false)} />
+      </div>
+    );
+  }
+
   if (showScriptGenerator) {
     return (
       <div className="flex flex-col h-full overflow-hidden">
@@ -218,6 +248,7 @@ export const ChatInterface = ({
           onBack={() => setShowScriptGenerator(false)}
           onOpenSaved={() => { setShowScriptGenerator(false); setShowSavedScripts(true); }}
           onOpenPortalBuilder={() => { setShowScriptGenerator(false); setShowPortalBuilder(true); }}
+          onOpenTopology={() => { setShowScriptGenerator(false); setShowTopology(true); }}
         />
       </div>
     );
@@ -236,7 +267,7 @@ export const ChatInterface = ({
                 <p className="text-lg text-muted-foreground mt-2">What can I help with?</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {suggestions.map((s) => (
                   <button
                     key={s.label}

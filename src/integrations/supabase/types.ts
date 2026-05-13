@@ -159,6 +159,163 @@ export type Database = {
         }
         Relationships: []
       }
+      device_agents: {
+        Row: {
+          agent_secret_hash: string | null
+          created_at: string
+          id: string
+          last_seen_at: string | null
+          name: string
+          pairing_code: string | null
+          pairing_code_expires_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_secret_hash?: string | null
+          created_at?: string
+          id?: string
+          last_seen_at?: string | null
+          name?: string
+          pairing_code?: string | null
+          pairing_code_expires_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_secret_hash?: string | null
+          created_at?: string
+          id?: string
+          last_seen_at?: string | null
+          name?: string
+          pairing_code?: string | null
+          pairing_code_expires_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      device_jobs: {
+        Row: {
+          created_at: string
+          device_id: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          kind: string
+          output_log: string | null
+          script_content: string | null
+          started_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          kind: string
+          output_log?: string | null
+          script_content?: string | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          output_log?: string | null
+          script_content?: string | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_jobs_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      devices: {
+        Row: {
+          agent_id: string | null
+          connection_method: string
+          created_at: string
+          credential_encrypted: string | null
+          host: string | null
+          id: string
+          last_connected_at: string | null
+          model: string | null
+          name: string
+          port: number | null
+          routeros_version: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          username: string | null
+          vendor: string
+        }
+        Insert: {
+          agent_id?: string | null
+          connection_method?: string
+          created_at?: string
+          credential_encrypted?: string | null
+          host?: string | null
+          id?: string
+          last_connected_at?: string | null
+          model?: string | null
+          name: string
+          port?: number | null
+          routeros_version?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          username?: string | null
+          vendor?: string
+        }
+        Update: {
+          agent_id?: string | null
+          connection_method?: string
+          created_at?: string
+          credential_encrypted?: string | null
+          host?: string | null
+          id?: string
+          last_connected_at?: string | null
+          model?: string | null
+          name?: string
+          port?: number | null
+          routeros_version?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          username?: string | null
+          vendor?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "devices_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "device_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       knowledge_history: {
         Row: {
           changed_at: string
