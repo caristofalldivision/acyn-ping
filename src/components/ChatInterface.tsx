@@ -221,6 +221,22 @@ export const ChatInterface = ({
     );
   }
 
+  if (showTopology) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <TopologyBuilder onBack={() => setShowTopology(false)} />
+      </div>
+    );
+  }
+
+  if (showDevices) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <DeviceVault onBack={() => setShowDevices(false)} />
+      </div>
+    );
+  }
+
   if (showScriptGenerator) {
     return (
       <div className="flex flex-col h-full overflow-hidden">
@@ -232,6 +248,7 @@ export const ChatInterface = ({
           onBack={() => setShowScriptGenerator(false)}
           onOpenSaved={() => { setShowScriptGenerator(false); setShowSavedScripts(true); }}
           onOpenPortalBuilder={() => { setShowScriptGenerator(false); setShowPortalBuilder(true); }}
+          onOpenTopology={() => { setShowScriptGenerator(false); setShowTopology(true); }}
         />
       </div>
     );
