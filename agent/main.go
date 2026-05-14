@@ -108,8 +108,8 @@ func main() {
 
 func doPair(code string) error {
 	base := envOr("TOPHA_BASE_URL", defaultBase)
-	body, _ := json.Marshal(map[string]string{"action": "claim", "pairing_code": code})
-	req, _ := http.NewRequest("POST", base+"/device-pair", bytes.NewReader(body))
+	body, _ := json.Marshal(map[string]string{"pairing_code": code, "agent_name": hostname()})
+	req, _ := http.NewRequest("POST", base+"/device-pair/claim", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := httpClient().Do(req)
 	if err != nil {
@@ -571,4 +571,12 @@ func envOr(k, d string) string {
 func die(msg string) {
 	fmt.Fprintln(os.Stderr, "error: "+msg)
 	os.Exit(1)
+}
+
+func hostname() string {
+	h, err := os.Hostname()
+	if err != nil || h == "" {
+		return "topha-agent"
+	}
+	return h
 }
