@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Plus, Router as RouterIcon, Wifi, Trash2, Terminal, Download } from "lucide-react";
 import { JobLog } from "./JobLog";
+import { HotspotWizard } from "./HotspotWizard";
 
 interface DeviceVaultProps {
   onBack: () => void;
@@ -27,6 +28,7 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [wizardDevice, setWizardDevice] = useState<Device | null>(null);
   const { toast } = useToast();
 
   const load = async () => {
@@ -66,6 +68,7 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
   };
 
   if (showAdd) return <AddDevice onBack={() => { setShowAdd(false); load(); }} />;
+  if (wizardDevice) return <HotspotWizard device={wizardDevice} onBack={() => setWizardDevice(null)} />;
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
@@ -127,7 +130,14 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
                   <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => runJob(d, "fetch_config")}>
                     <Download className="w-3 h-3" /> Fetch Config
                   </Button>
-                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" disabled title="Coming next">
+                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5"
+                    onClick={() => {
+                      if (!d.agent_id) {
+                        toast({ title: "Pair an agent first", variant: "destructive" });
+                        return;
+                      }
+                      setWizardDevice(d);
+                    }}>
                     <Wifi className="w-3 h-3" /> Hotspot Wizard
                   </Button>
                   <Button size="sm" variant="ghost" className="h-8 text-xs gap-1.5" disabled>

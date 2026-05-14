@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.device-jobs]
 verify_jwt = false
+
+[functions.wizard-hotspot]
+verify_jwt = false
