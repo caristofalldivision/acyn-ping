@@ -388,6 +388,36 @@ func connectDevice(d device) (deviceExec, error) {
 	}
 }
 
+// connectDeviceWithRetry retries up to 3 times with exponential backoff.
+func connectDeviceWithRetry(d device, logf func(string)) (deviceExec, error) {
+	var lastErr error
+	delays := []time.Duration{1 * time.Second, 3 * time.Second, 9 * time.Second}
+	for i, delay := range delays {
+		if i > 0 {
+			logf(fmt.Sprintf("retry %d/%d after %s...", i+1, len(delays), delay))
+			time.Sleep(delay)
+		}
+		x, err := connectDevice(d)
+		if err == nil {
+			return x, nil
+		}
+		lastErr = err
+		logf("connect attempt failed: " + err.Error())
+	}
+	return nil, lastErr
+}
+
+// extractField returns the value after `key:` from a RouterOS print line.
+func extractField(out, key string) string {
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, key+":") {
+			return strings.TrimSpace(strings.TrimPrefix(line, key+":"))
+		}
+	}
+	return ""
+}
+
 // --- SSH driver ---
 
 type sshExec struct {
@@ -401,7 +431,7 @@ func newSSH(d device) (*sshExec, error) {
 	}
 	cfg := &ssh.ClientConfig{
 		User:            d.Username,
-		Auth:            []ssh.AuthMethod{ssh.Password(d.CredentialEncrypted)},
+		Auth:            []ssh.AuthMethod{ssh.Password(d.Password)},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         15 * time.Second,
 	}
@@ -462,30 +492,70 @@ func newREST(d device) *restExec {
 }
 
 func (r *restExec) run(cmd string) (string, error) {
-	// Translate a RouterOS CLI line into REST: e.g. "/ip address add address=1.1.1.1/24 interface=ether1"
-	// becomes POST /rest/ip/address with body {address:..., interface:...}.
+	// Translate a RouterOS CLI line into REST.
+	//
+	//   /ip address add address=1.1.1.1/24 interface=ether1
+	//      → PUT /rest/ip/address  body {address:"...", interface:"..."}
+	//   /ip hotspot print
+	//      → GET /rest/ip/hotspot
+	//   /ip address remove [find comment="x"]
+	//      → POST /rest/ip/address/remove  body {".query": ["comment=x"]}
+	//   /ip hotspot user profile add name=foo rate-limit=5M/5M
+	//      → PUT /rest/ip/hotspot/user/profile  body {name:"foo", ...}
+	//
+	// The trick is that the action keyword (add/print/set/remove) can appear
+	// anywhere after the leading path, not always at parts[1].
 	parts := tokenize(cmd)
 	if len(parts) == 0 {
 		return "", nil
 	}
-	path := strings.TrimPrefix(parts[0], "/")
+	// Find the action token (first non-path word that is also not a key=value).
+	actionIdx := -1
+	for i := 1; i < len(parts); i++ {
+		switch parts[i] {
+		case "add", "print", "remove", "set", "enable", "disable":
+			actionIdx = i
+			break
+		}
+		if actionIdx != -1 {
+			break
+		}
+	}
 	verb := "POST"
-	if len(parts) > 1 {
-		switch parts[1] {
+	pathParts := []string{strings.TrimPrefix(parts[0], "/")}
+	argStart := len(parts)
+	if actionIdx > 0 {
+		// path is parts[0..actionIdx-1] joined with /
+		pathParts = []string{strings.TrimPrefix(parts[0], "/")}
+		pathParts = append(pathParts, parts[1:actionIdx]...)
+		switch parts[actionIdx] {
 		case "add":
 			verb = "PUT"
 		case "print":
 			verb = "GET"
 		case "remove":
 			verb = "POST"
-			path = path + "/remove"
+			pathParts = append(pathParts, "remove")
 		case "set":
 			verb = "PATCH"
+		case "enable":
+			verb = "POST"
+			pathParts = append(pathParts, "enable")
+		case "disable":
+			verb = "POST"
+			pathParts = append(pathParts, "disable")
 		}
-		path = strings.ReplaceAll(path, " ", "/")
+		argStart = actionIdx + 1
+	} else {
+		// No action keyword (rare): treat as GET
+		verb = "GET"
+		pathParts = append(pathParts, parts[1:]...)
 	}
 	body := map[string]string{}
-	for _, p := range parts[2:] {
+	for _, p := range parts[argStart:] {
+		if strings.HasPrefix(p, "[") || strings.HasPrefix(p, "where") {
+			continue // bracket/where queries unsupported via REST in v0.1
+		}
 		if i := strings.Index(p, "="); i > 0 {
 			body[p[:i]] = strings.Trim(p[i+1:], `"`)
 		}
@@ -495,9 +565,14 @@ func (r *restExec) run(cmd string) (string, error) {
 	if port == 0 {
 		port = 443
 	}
-	url := fmt.Sprintf("https://%s:%d/rest/%s", r.d.Host, port, strings.ReplaceAll(path, " ", "/"))
-	req, _ := http.NewRequest(verb, url, bytes.NewReader(bb))
-	req.SetBasicAuth(r.d.Username, r.d.CredentialEncrypted)
+	path := strings.Join(pathParts, "/")
+	url := fmt.Sprintf("https://%s:%d/rest/%s", r.d.Host, port, path)
+	var reqBody io.Reader
+	if verb != "GET" && len(body) > 0 {
+		reqBody = bytes.NewReader(bb)
+	}
+	req, _ := http.NewRequest(verb, url, reqBody)
+	req.SetBasicAuth(r.d.Username, r.d.Password)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := r.c.Do(req)
 	if err != nil {
