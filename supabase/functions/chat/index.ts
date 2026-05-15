@@ -937,12 +937,16 @@ ${JSON.stringify(topology, null, 2)}
 
 Remember: You're not just answering questions, you're a strategic partner helping ${userName} achieve their goals. You have memory across all conversations and can reference past discussions.`;
 
-    // Model selection: Pro for complex tasks, Flash as fallback on rate limit
-    const PRIMARY_MODEL = "google/gemini-2.5-pro";
-    const FALLBACK_MODEL = "google/gemini-2.5-flash";
+    // Model selection: Flash is fast & reliable as primary; Flash-Lite as fallback.
+    // Pro only when the user explicitly asks for "deep" analysis.
+    const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
+    const wantsDeep = /\b(deep|in detail|detailed plan|comprehensive|deep dive)\b/i.test(String(lastUserMsg));
+    const PRIMARY_MODEL = wantsDeep ? "google/gemini-2.5-pro" : "google/gemini-2.5-flash";
+    const FALLBACK_MODEL = "google/gemini-2.5-flash-lite";
 
     async function callGateway(model: string, withTools: boolean, extraMessages: any[] = []) {
-      return await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const t0 = Date.now();
+      const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${LOVABLE_API_KEY}`,
@@ -958,31 +962,51 @@ Remember: You're not just answering questions, you're a strategic partner helpin
           ...(withTools ? { tools, tool_choice: "auto" } : {}),
         }),
       });
+      console.log(`[ai] model=${model} status=${r.status} latency=${Date.now() - t0}ms`);
+      return r;
     }
 
-    // First API call - Pro with Flash fallback on 429
-    let response = await callGateway(PRIMARY_MODEL, true);
-    if (response.status === 429) {
-      console.warn("Pro rate-limited, falling back to Flash");
-      response = await callGateway(FALLBACK_MODEL, true);
+    async function callWithFallback(withTools: boolean, extras: any[] = []) {
+      // Try primary, retry once on 5xx, fall back to flash-lite on 429/5xx
+      let r: Response;
+      try {
+        r = await callGateway(PRIMARY_MODEL, withTools, extras);
+      } catch (e) {
+        console.warn("primary network error, falling back:", e);
+        r = await callGateway(FALLBACK_MODEL, withTools, extras);
+        return r;
+      }
+      if (r.status === 429 || r.status >= 500) {
+        console.warn(`primary returned ${r.status}, falling back to ${FALLBACK_MODEL}`);
+        try {
+          r = await callGateway(FALLBACK_MODEL, withTools, extras);
+        } catch (e) {
+          console.error("fallback network error:", e);
+        }
+      }
+      return r;
     }
+
+    let response = await callWithFallback(true);
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
       if (response.status === 402) {
         return new Response(
           JSON.stringify({ error: "Payment required. Please add credits to your Lovable workspace." }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const errorText = await response.text();
+      const errorText = await response.text().catch(() => "");
       console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
+      // Return a friendly assistant reply instead of a 500 so the UI keeps working
+      return new Response(
+        JSON.stringify({
+          reply: response.status === 429
+            ? "I'm hitting a rate limit right now — give me a moment and try again."
+            : "I had trouble reaching the model. Try again in a few seconds.",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const data = await response.json();
@@ -1005,16 +1029,15 @@ Remember: You're not just answering questions, you're a strategic partner helpin
         console.log(`Tool ${toolCall.function.name} result:`, result);
       }
 
-      let finalResponse = await callGateway(PRIMARY_MODEL, false, [assistantMessage, ...toolResults]);
-      if (finalResponse.status === 429) {
-        console.warn("Pro rate-limited on tool follow-up, falling back to Flash");
-        finalResponse = await callGateway(FALLBACK_MODEL, false, [assistantMessage, ...toolResults]);
-      }
+      const finalResponse = await callWithFallback(false, [assistantMessage, ...toolResults]);
 
       if (!finalResponse.ok) {
-        const errorText = await finalResponse.text();
+        const errorText = await finalResponse.text().catch(() => "");
         console.error("AI gateway error on final response:", finalResponse.status, errorText);
-        throw new Error(`AI gateway error: ${finalResponse.status}`);
+        return new Response(
+          JSON.stringify({ reply: "I ran your tool but couldn't summarize the result — check the logs and try again." }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       const finalData = await finalResponse.json();
