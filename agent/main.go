@@ -17,6 +17,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -24,9 +25,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"os/user"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -45,14 +48,16 @@ type config struct {
 }
 
 type device struct {
-	ID                  string `json:"id"`
-	Name                string `json:"name"`
-	Vendor              string `json:"vendor"`
-	Host                string `json:"host"`
-	Port                int    `json:"port"`
-	ConnectionMethod    string `json:"connection_method"`
-	Username            string `json:"username"`
-	CredentialEncrypted string `json:"credential_encrypted"`
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Vendor           string `json:"vendor"`
+	Host             string `json:"host"`
+	Port             int    `json:"port"`
+	ConnectionMethod string `json:"connection_method"`
+	Username         string `json:"username"`
+	// Wire field is named "credential_encrypted" for compatibility, but the
+	// agent only sees the plaintext password the operator entered.
+	Password string `json:"credential_encrypted"`
 }
 
 type job struct {
@@ -141,7 +146,23 @@ func runLoop() {
 		die("not paired yet — run: topha-agent pair <code>")
 	}
 	fmt.Printf("topha-agent online · agent_id=%s · polling %s\n", c.AgentID, c.BaseURL)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		s := <-sigCh
+		fmt.Printf("\nreceived %s, shutting down...\n", s)
+		cancel()
+	}()
+
 	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("topha-agent stopped")
+			return
+		default:
+		}
 		jobs, err := fetchPending(c)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "poll error: %v\n", err)
@@ -149,7 +170,10 @@ func runLoop() {
 		for _, j := range jobs {
 			handleJob(c, j)
 		}
-		time.Sleep(pollInterval)
+		select {
+		case <-ctx.Done():
+		case <-time.After(pollInterval):
+		}
 	}
 }
 
@@ -181,14 +205,23 @@ func handleJob(c config, j job) {
 	logf := func(line string) { sendLog(c, j.ID, line) }
 	logf(fmt.Sprintf("== job %s · kind=%s · device=%s (%s)", j.ID[:8], j.Kind, j.Devices.Name, j.Devices.Host))
 
-	exec, err := connectDevice(j.Devices)
+	exec, err := connectDeviceWithRetry(j.Devices, logf)
 	if err != nil {
 		logf("ERROR connecting: " + err.Error())
+		reportDeviceStatus(c, j.Devices.ID, false, "", "")
 		sendResult(c, j.ID, "failed", "", err.Error())
 		return
 	}
 	defer exec.close()
 	logf("connected via " + j.Devices.ConnectionMethod)
+
+	// Best-effort: report device online + identify model/version
+	go func() {
+		ver, _ := exec.run("/system resource print")
+		model := extractField(ver, "board-name")
+		rosVer := extractField(ver, "version")
+		reportDeviceStatus(c, j.Devices.ID, true, rosVer, model)
+	}()
 
 	switch j.Kind {
 	case "fetch_config":
@@ -276,7 +309,6 @@ func runWizard(c config, j job, exec deviceExec, logf func(string)) {
 		logf(stepOut.String())
 		if failed {
 			logf(fmt.Sprintf("STEP FAILED: %v — running rollback", lastErr))
-			// run this step's rollback + all previously-applied rollbacks (LIFO)
 			toRollback := append([][]string{s.RollbackCommands}, appliedRollbacks...)
 			for _, rcmds := range toRollback {
 				for _, rc := range rcmds {
@@ -287,11 +319,53 @@ func runWizard(c config, j job, exec deviceExec, logf func(string)) {
 			sendResult(c, j.ID, "rolled_back", fullOut.String(), lastErr.Error())
 			return
 		}
+
+		// After backup step, wait until the .backup file actually exists on disk
+		if s.ID == "backup" && w.Plan.BackupName != "" {
+			if err := waitForBackup(exec, w.Plan.BackupName, logf); err != nil {
+				logf("BACKUP NOT WRITTEN: " + err.Error() + " — aborting before any writes")
+				sendResult(c, j.ID, "failed", fullOut.String(), "backup did not materialize: "+err.Error())
+				return
+			}
+			logf("backup confirmed on disk: " + w.Plan.BackupName + ".backup")
+		}
+
+		// After preflight, fail-fast if the read tells us the network is unsafe
+		if s.ID == "preflight" {
+			if reason := preflightReject(stepOut.String()); reason != "" {
+				logf("PREFLIGHT REJECT: " + reason + " — aborting")
+				sendResult(c, j.ID, "failed", fullOut.String(), "preflight: "+reason)
+				return
+			}
+		}
+
 		if s.Kind == "write" && len(s.RollbackCommands) > 0 {
 			appliedRollbacks = append([][]string{s.RollbackCommands}, appliedRollbacks...)
 		}
 	}
 	sendResult(c, j.ID, "success", fullOut.String(), "")
+}
+
+func waitForBackup(exec deviceExec, name string, logf func(string)) error {
+	cmd := `/file print where name="` + name + `.backup"`
+	for i := 0; i < 10; i++ {
+		out, _ := exec.run(cmd)
+		if strings.Contains(out, name+".backup") {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return errors.New("timed out waiting for " + name + ".backup")
+}
+
+func preflightReject(out string) string {
+	low := strings.ToLower(out)
+	// MikroTik prints a header even with zero matches; we look for the absence
+	// of any data rows for the interface query, which is the first command.
+	if strings.Contains(low, "no such item") {
+		return "interface or address not found"
+	}
+	return ""
 }
 
 // ---------------- device drivers ----------------
@@ -314,6 +388,36 @@ func connectDevice(d device) (deviceExec, error) {
 	}
 }
 
+// connectDeviceWithRetry retries up to 3 times with exponential backoff.
+func connectDeviceWithRetry(d device, logf func(string)) (deviceExec, error) {
+	var lastErr error
+	delays := []time.Duration{1 * time.Second, 3 * time.Second, 9 * time.Second}
+	for i, delay := range delays {
+		if i > 0 {
+			logf(fmt.Sprintf("retry %d/%d after %s...", i+1, len(delays), delay))
+			time.Sleep(delay)
+		}
+		x, err := connectDevice(d)
+		if err == nil {
+			return x, nil
+		}
+		lastErr = err
+		logf("connect attempt failed: " + err.Error())
+	}
+	return nil, lastErr
+}
+
+// extractField returns the value after `key:` from a RouterOS print line.
+func extractField(out, key string) string {
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, key+":") {
+			return strings.TrimSpace(strings.TrimPrefix(line, key+":"))
+		}
+	}
+	return ""
+}
+
 // --- SSH driver ---
 
 type sshExec struct {
@@ -327,7 +431,7 @@ func newSSH(d device) (*sshExec, error) {
 	}
 	cfg := &ssh.ClientConfig{
 		User:            d.Username,
-		Auth:            []ssh.AuthMethod{ssh.Password(d.CredentialEncrypted)},
+		Auth:            []ssh.AuthMethod{ssh.Password(d.Password)},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         15 * time.Second,
 	}
@@ -388,30 +492,70 @@ func newREST(d device) *restExec {
 }
 
 func (r *restExec) run(cmd string) (string, error) {
-	// Translate a RouterOS CLI line into REST: e.g. "/ip address add address=1.1.1.1/24 interface=ether1"
-	// becomes POST /rest/ip/address with body {address:..., interface:...}.
+	// Translate a RouterOS CLI line into REST.
+	//
+	//   /ip address add address=1.1.1.1/24 interface=ether1
+	//      → PUT /rest/ip/address  body {address:"...", interface:"..."}
+	//   /ip hotspot print
+	//      → GET /rest/ip/hotspot
+	//   /ip address remove [find comment="x"]
+	//      → POST /rest/ip/address/remove  body {".query": ["comment=x"]}
+	//   /ip hotspot user profile add name=foo rate-limit=5M/5M
+	//      → PUT /rest/ip/hotspot/user/profile  body {name:"foo", ...}
+	//
+	// The trick is that the action keyword (add/print/set/remove) can appear
+	// anywhere after the leading path, not always at parts[1].
 	parts := tokenize(cmd)
 	if len(parts) == 0 {
 		return "", nil
 	}
-	path := strings.TrimPrefix(parts[0], "/")
+	// Find the action token (first non-path word that is also not a key=value).
+	actionIdx := -1
+	for i := 1; i < len(parts); i++ {
+		switch parts[i] {
+		case "add", "print", "remove", "set", "enable", "disable":
+			actionIdx = i
+			break
+		}
+		if actionIdx != -1 {
+			break
+		}
+	}
 	verb := "POST"
-	if len(parts) > 1 {
-		switch parts[1] {
+	pathParts := []string{strings.TrimPrefix(parts[0], "/")}
+	argStart := len(parts)
+	if actionIdx > 0 {
+		// path is parts[0..actionIdx-1] joined with /
+		pathParts = []string{strings.TrimPrefix(parts[0], "/")}
+		pathParts = append(pathParts, parts[1:actionIdx]...)
+		switch parts[actionIdx] {
 		case "add":
 			verb = "PUT"
 		case "print":
 			verb = "GET"
 		case "remove":
 			verb = "POST"
-			path = path + "/remove"
+			pathParts = append(pathParts, "remove")
 		case "set":
 			verb = "PATCH"
+		case "enable":
+			verb = "POST"
+			pathParts = append(pathParts, "enable")
+		case "disable":
+			verb = "POST"
+			pathParts = append(pathParts, "disable")
 		}
-		path = strings.ReplaceAll(path, " ", "/")
+		argStart = actionIdx + 1
+	} else {
+		// No action keyword (rare): treat as GET
+		verb = "GET"
+		pathParts = append(pathParts, parts[1:]...)
 	}
 	body := map[string]string{}
-	for _, p := range parts[2:] {
+	for _, p := range parts[argStart:] {
+		if strings.HasPrefix(p, "[") || strings.HasPrefix(p, "where") {
+			continue // bracket/where queries unsupported via REST in v0.1
+		}
 		if i := strings.Index(p, "="); i > 0 {
 			body[p[:i]] = strings.Trim(p[i+1:], `"`)
 		}
@@ -421,9 +565,14 @@ func (r *restExec) run(cmd string) (string, error) {
 	if port == 0 {
 		port = 443
 	}
-	url := fmt.Sprintf("https://%s:%d/rest/%s", r.d.Host, port, strings.ReplaceAll(path, " ", "/"))
-	req, _ := http.NewRequest(verb, url, bytes.NewReader(bb))
-	req.SetBasicAuth(r.d.Username, r.d.CredentialEncrypted)
+	path := strings.Join(pathParts, "/")
+	url := fmt.Sprintf("https://%s:%d/rest/%s", r.d.Host, port, path)
+	var reqBody io.Reader
+	if verb != "GET" && len(body) > 0 {
+		reqBody = bytes.NewReader(bb)
+	}
+	req, _ := http.NewRequest(verb, url, reqBody)
+	req.SetBasicAuth(r.d.Username, r.d.Password)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := r.c.Do(req)
 	if err != nil {
@@ -479,6 +628,25 @@ func tokenize(cmd string) []string {
 		out = append(out, cur.String())
 	}
 	return out
+}
+
+func reportDeviceStatus(c config, deviceID string, online bool, version, model string) {
+	if deviceID == "" {
+		return
+	}
+	body, _ := json.Marshal(map[string]any{
+		"device_id":         deviceID,
+		"online":            online,
+		"routeros_version":  version,
+		"model":             model,
+	})
+	req, _ := http.NewRequest("POST", c.BaseURL+"/device-jobs/device-status", bytes.NewReader(body))
+	req.Header.Set("X-Agent-Id", c.AgentID)
+	req.Header.Set("X-Agent-Secret", c.AgentSecret)
+	req.Header.Set("Content-Type", "application/json")
+	if resp, err := httpClient().Do(req); err == nil {
+		resp.Body.Close()
+	}
 }
 
 // ---------------- topha API helpers ----------------
