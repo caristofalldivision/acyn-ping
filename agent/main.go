@@ -205,14 +205,23 @@ func handleJob(c config, j job) {
 	logf := func(line string) { sendLog(c, j.ID, line) }
 	logf(fmt.Sprintf("== job %s · kind=%s · device=%s (%s)", j.ID[:8], j.Kind, j.Devices.Name, j.Devices.Host))
 
-	exec, err := connectDevice(j.Devices)
+	exec, err := connectDeviceWithRetry(j.Devices, logf)
 	if err != nil {
 		logf("ERROR connecting: " + err.Error())
+		reportDeviceStatus(c, j.Devices.ID, false, "", "")
 		sendResult(c, j.ID, "failed", "", err.Error())
 		return
 	}
 	defer exec.close()
 	logf("connected via " + j.Devices.ConnectionMethod)
+
+	// Best-effort: report device online + identify model/version
+	go func() {
+		ver, _ := exec.run("/system resource print")
+		model := extractField(ver, "board-name")
+		rosVer := extractField(ver, "version")
+		reportDeviceStatus(c, j.Devices.ID, true, rosVer, model)
+	}()
 
 	switch j.Kind {
 	case "fetch_config":
@@ -300,7 +309,6 @@ func runWizard(c config, j job, exec deviceExec, logf func(string)) {
 		logf(stepOut.String())
 		if failed {
 			logf(fmt.Sprintf("STEP FAILED: %v — running rollback", lastErr))
-			// run this step's rollback + all previously-applied rollbacks (LIFO)
 			toRollback := append([][]string{s.RollbackCommands}, appliedRollbacks...)
 			for _, rcmds := range toRollback {
 				for _, rc := range rcmds {
@@ -311,11 +319,53 @@ func runWizard(c config, j job, exec deviceExec, logf func(string)) {
 			sendResult(c, j.ID, "rolled_back", fullOut.String(), lastErr.Error())
 			return
 		}
+
+		// After backup step, wait until the .backup file actually exists on disk
+		if s.ID == "backup" && w.Plan.BackupName != "" {
+			if err := waitForBackup(exec, w.Plan.BackupName, logf); err != nil {
+				logf("BACKUP NOT WRITTEN: " + err.Error() + " — aborting before any writes")
+				sendResult(c, j.ID, "failed", fullOut.String(), "backup did not materialize: "+err.Error())
+				return
+			}
+			logf("backup confirmed on disk: " + w.Plan.BackupName + ".backup")
+		}
+
+		// After preflight, fail-fast if the read tells us the network is unsafe
+		if s.ID == "preflight" {
+			if reason := preflightReject(stepOut.String()); reason != "" {
+				logf("PREFLIGHT REJECT: " + reason + " — aborting")
+				sendResult(c, j.ID, "failed", fullOut.String(), "preflight: "+reason)
+				return
+			}
+		}
+
 		if s.Kind == "write" && len(s.RollbackCommands) > 0 {
 			appliedRollbacks = append([][]string{s.RollbackCommands}, appliedRollbacks...)
 		}
 	}
 	sendResult(c, j.ID, "success", fullOut.String(), "")
+}
+
+func waitForBackup(exec deviceExec, name string, logf func(string)) error {
+	cmd := `/file print where name="` + name + `.backup"`
+	for i := 0; i < 10; i++ {
+		out, _ := exec.run(cmd)
+		if strings.Contains(out, name+".backup") {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return errors.New("timed out waiting for " + name + ".backup")
+}
+
+func preflightReject(out string) string {
+	low := strings.ToLower(out)
+	// MikroTik prints a header even with zero matches; we look for the absence
+	// of any data rows for the interface query, which is the first command.
+	if strings.Contains(low, "no such item") {
+		return "interface or address not found"
+	}
+	return ""
 }
 
 // ---------------- device drivers ----------------
