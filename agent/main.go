@@ -630,6 +630,25 @@ func tokenize(cmd string) []string {
 	return out
 }
 
+func reportDeviceStatus(c config, deviceID string, online bool, version, model string) {
+	if deviceID == "" {
+		return
+	}
+	body, _ := json.Marshal(map[string]any{
+		"device_id":         deviceID,
+		"online":            online,
+		"routeros_version":  version,
+		"model":             model,
+	})
+	req, _ := http.NewRequest("POST", c.BaseURL+"/device-jobs/device-status", bytes.NewReader(body))
+	req.Header.Set("X-Agent-Id", c.AgentID)
+	req.Header.Set("X-Agent-Secret", c.AgentSecret)
+	req.Header.Set("Content-Type", "application/json")
+	if resp, err := httpClient().Do(req); err == nil {
+		resp.Body.Close()
+	}
+}
+
 // ---------------- topha API helpers ----------------
 
 func sendLog(c config, jobID, line string) {
