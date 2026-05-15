@@ -17,6 +17,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -24,9 +25,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"os/user"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -45,14 +48,16 @@ type config struct {
 }
 
 type device struct {
-	ID                  string `json:"id"`
-	Name                string `json:"name"`
-	Vendor              string `json:"vendor"`
-	Host                string `json:"host"`
-	Port                int    `json:"port"`
-	ConnectionMethod    string `json:"connection_method"`
-	Username            string `json:"username"`
-	CredentialEncrypted string `json:"credential_encrypted"`
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Vendor           string `json:"vendor"`
+	Host             string `json:"host"`
+	Port             int    `json:"port"`
+	ConnectionMethod string `json:"connection_method"`
+	Username         string `json:"username"`
+	// Wire field is named "credential_encrypted" for compatibility, but the
+	// agent only sees the plaintext password the operator entered.
+	Password string `json:"credential_encrypted"`
 }
 
 type job struct {
@@ -141,7 +146,23 @@ func runLoop() {
 		die("not paired yet — run: topha-agent pair <code>")
 	}
 	fmt.Printf("topha-agent online · agent_id=%s · polling %s\n", c.AgentID, c.BaseURL)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		s := <-sigCh
+		fmt.Printf("\nreceived %s, shutting down...\n", s)
+		cancel()
+	}()
+
 	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("topha-agent stopped")
+			return
+		default:
+		}
 		jobs, err := fetchPending(c)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "poll error: %v\n", err)
@@ -149,7 +170,10 @@ func runLoop() {
 		for _, j := range jobs {
 			handleJob(c, j)
 		}
-		time.Sleep(pollInterval)
+		select {
+		case <-ctx.Done():
+		case <-time.After(pollInterval):
+		}
 	}
 }
 
