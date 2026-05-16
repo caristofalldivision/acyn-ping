@@ -129,6 +129,10 @@ export const ChatInterface = ({
       setShowDevices(true);
       return;
     }
+    if (messageContent === "__OPEN_BILLING__") {
+      setShowBilling(true);
+      return;
+    }
     if (!messageContent.trim() || loading || !conversationId) return;
     const userMessage: Message = { role: "user", content: messageContent };
     setMessages(prev => [...prev, userMessage]);
