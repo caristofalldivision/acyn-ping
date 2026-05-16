@@ -19,7 +19,7 @@ export const ProviderSettings = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data } = await supabase.from("app_settings" as any).select("*").eq("user_id", user.id).maybeSingle();
-      if (data) setS((prev: any) => ({ ...prev, ...data }));
+      if (data) setS((prev: any) => ({ ...prev, ...(data as any) }));
     })();
   }, []);
 
