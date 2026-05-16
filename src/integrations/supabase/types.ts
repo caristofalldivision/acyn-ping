@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          default_currency: string | null
+          pesapal_callback_url: string | null
+          pesapal_env: string | null
+          sms_on_expiry: boolean | null
+          sms_on_expiry_warn: boolean | null
+          sms_on_payment: boolean | null
+          sms_sender_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          default_currency?: string | null
+          pesapal_callback_url?: string | null
+          pesapal_env?: string | null
+          sms_on_expiry?: boolean | null
+          sms_on_expiry_warn?: boolean | null
+          sms_on_payment?: boolean | null
+          sms_sender_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          default_currency?: string | null
+          pesapal_callback_url?: string | null
+          pesapal_env?: string | null
+          sms_on_expiry?: boolean | null
+          sms_on_expiry_warn?: boolean | null
+          sms_on_payment?: boolean | null
+          sms_sender_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       calendar_events: {
         Row: {
           attendees: string[] | null
@@ -476,6 +512,80 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_events: {
+        Row: {
+          created_at: string
+          event_type: string | null
+          id: string
+          provider: string
+          raw_payload: Json | null
+          status: string | null
+          subscription_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type?: string | null
+          id?: string
+          provider?: string
+          raw_payload?: Json | null
+          status?: string | null
+          subscription_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string | null
+          id?: string
+          provider?: string
+          raw_payload?: Json | null
+          status?: string | null
+          subscription_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_events_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plans: {
+        Row: {
+          bandwidth_profile: string | null
+          created_at: string
+          duration_minutes: number
+          id: string
+          is_active: boolean
+          name: string
+          price_kes: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bandwidth_profile?: string | null
+          created_at?: string
+          duration_minutes: number
+          id?: string
+          is_active?: boolean
+          name: string
+          price_kes: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bandwidth_profile?: string | null
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          price_kes?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       saved_scripts: {
         Row: {
           category: string
@@ -514,6 +624,74 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          amount_kes: number
+          created_at: string
+          customer_email: string | null
+          customer_phone: string
+          device_id: string | null
+          expires_at: string | null
+          hotspot_password: string | null
+          hotspot_username: string | null
+          id: string
+          pesapal_merchant_ref: string | null
+          pesapal_tracking_id: string | null
+          plan_id: string
+          started_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          warned_at: string | null
+        }
+        Insert: {
+          amount_kes: number
+          created_at?: string
+          customer_email?: string | null
+          customer_phone: string
+          device_id?: string | null
+          expires_at?: string | null
+          hotspot_password?: string | null
+          hotspot_username?: string | null
+          id?: string
+          pesapal_merchant_ref?: string | null
+          pesapal_tracking_id?: string | null
+          plan_id: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          warned_at?: string | null
+        }
+        Update: {
+          amount_kes?: number
+          created_at?: string
+          customer_email?: string | null
+          customer_phone?: string
+          device_id?: string | null
+          expires_at?: string | null
+          hotspot_password?: string | null
+          hotspot_username?: string | null
+          id?: string
+          pesapal_merchant_ref?: string | null
+          pesapal_tracking_id?: string | null
+          plan_id?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          warned_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_contacts: {
         Row: {
