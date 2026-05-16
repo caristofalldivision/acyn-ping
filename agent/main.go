@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -80,6 +81,16 @@ type wizardPayload struct {
 		} `json:"steps"`
 	} `json:"plan"`
 	Script string `json:"script"`
+}
+
+type portalFile struct {
+	Name      string `json:"name"`
+	ContentB64 string `json:"content_b64"`
+}
+type portalPayload struct {
+	HotspotProfile string       `json:"hotspot_profile"` // e.g. "hsprof1"
+	HtmlDir        string       `json:"html_dir"`        // e.g. "hotspot"
+	Files          []portalFile `json:"files"`
 }
 
 func main() {
@@ -274,9 +285,41 @@ func handleJob(c config, j job) {
 		sendResult(c, j.ID, status, out, errStr)
 	case "wizard_hotspot":
 		runWizard(c, j, exec, logf)
+	case "deploy_portal":
+		runDeployPortal(c, j, exec, logf)
 	default:
 		sendResult(c, j.ID, "failed", "", "unknown kind: "+j.Kind)
 	}
+}
+
+func runDeployPortal(c config, j job, exec deviceExec, logf func(string)) {
+	if j.ScriptContent == nil {
+		sendResult(c, j.ID, "failed", "", "no portal payload")
+		return
+	}
+	var p portalPayload
+	if err := json.Unmarshal([]byte(*j.ScriptContent), &p); err != nil {
+		sendResult(c, j.ID, "failed", "", "bad payload: "+err.Error())
+		return
+	}
+	if p.HtmlDir == "" { p.HtmlDir = "hotspot" }
+	if p.HotspotProfile == "" { p.HotspotProfile = "hsprof1" }
+	var out bytes.Buffer
+	for _, f := range p.Files {
+		data, err := base64.StdEncoding.DecodeString(f.ContentB64)
+		if err != nil { sendResult(c, j.ID, "failed", out.String(), "bad b64: "+err.Error()); return }
+		// Use RouterOS /file/add for text files (works on REST + SSH). Inline content via escaped string.
+		safe := strings.ReplaceAll(string(data), "\"", "\\\"")
+		cmd := fmt.Sprintf(`/file add name=%s/%s contents="%s"`, p.HtmlDir, f.Name, safe)
+		logf("upload " + f.Name + " (" + fmt.Sprintf("%d", len(data)) + " bytes)")
+		o, err := exec.run(cmd)
+		out.WriteString(o + "\n")
+		if err != nil { sendResult(c, j.ID, "failed", out.String(), err.Error()); return }
+	}
+	o, err := exec.run(fmt.Sprintf(`/ip hotspot profile set [find name=%s] html-directory=%s`, p.HotspotProfile, p.HtmlDir))
+	out.WriteString(o + "\n")
+	if err != nil { sendResult(c, j.ID, "failed", out.String(), err.Error()); return }
+	sendResult(c, j.ID, "success", out.String(), "")
 }
 
 func runWizard(c config, j job, exec deviceExec, logf func(string)) {

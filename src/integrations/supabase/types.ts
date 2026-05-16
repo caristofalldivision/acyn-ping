@@ -16,35 +16,53 @@ export type Database = {
     Tables: {
       app_settings: {
         Row: {
+          business_name: string | null
           default_currency: string | null
           pesapal_callback_url: string | null
+          pesapal_consumer_key: string | null
+          pesapal_consumer_secret: string | null
           pesapal_env: string | null
+          pesapal_ipn_id: string | null
           sms_on_expiry: boolean | null
           sms_on_expiry_warn: boolean | null
           sms_on_payment: boolean | null
           sms_sender_id: string | null
+          talksasa_api_key: string | null
+          talksasa_sender_id: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          business_name?: string | null
           default_currency?: string | null
           pesapal_callback_url?: string | null
+          pesapal_consumer_key?: string | null
+          pesapal_consumer_secret?: string | null
           pesapal_env?: string | null
+          pesapal_ipn_id?: string | null
           sms_on_expiry?: boolean | null
           sms_on_expiry_warn?: boolean | null
           sms_on_payment?: boolean | null
           sms_sender_id?: string | null
+          talksasa_api_key?: string | null
+          talksasa_sender_id?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          business_name?: string | null
           default_currency?: string | null
           pesapal_callback_url?: string | null
+          pesapal_consumer_key?: string | null
+          pesapal_consumer_secret?: string | null
           pesapal_env?: string | null
+          pesapal_ipn_id?: string | null
           sms_on_expiry?: boolean | null
           sms_on_expiry_warn?: boolean | null
           sms_on_payment?: boolean | null
           sms_sender_id?: string | null
+          talksasa_api_key?: string | null
+          talksasa_sender_id?: string | null
           updated_at?: string
           user_id?: string
         }

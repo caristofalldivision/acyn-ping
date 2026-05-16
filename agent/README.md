@@ -7,11 +7,19 @@ CGNAT/NAT — Topha never needs your router's public IP.
 ## Install (prebuilt binary)
 
 ```bash
-# Linux/macOS one-liner (adjust URL once binaries are hosted)
-curl -fsSL https://github.com/topha/agent/releases/latest/download/topha-agent-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/amd64/') \
-  -o /usr/local/bin/topha-agent
-chmod +x /usr/local/bin/topha-agent
+# Linux / macOS
+curl -fsSL https://topha.acyn.world/agent/install.sh | sh
+
+# Pair in one go
+curl -fsSL https://topha.acyn.world/agent/install.sh | sh -s -- <PAIRING_CODE>
+
+# Windows (PowerShell)
+iwr -useb https://topha.acyn.world/agent/install.ps1 | iex
 ```
+
+The installer downloads from GitHub Releases by default. Override with
+`TOPHA_RELEASE_BASE=https://your-host/path` if you self-host the binaries.
+
 
 ## Build from source
 
