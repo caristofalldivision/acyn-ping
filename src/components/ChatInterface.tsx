@@ -12,6 +12,7 @@ import { SavedScripts } from "./SavedScripts";
 import { CaptivePortalBuilder } from "./CaptivePortalBuilder";
 import { TopologyBuilder } from "./TopologyBuilder";
 import { DeviceVault } from "./DeviceVault";
+import { Billing } from "./Billing";
 
 interface Message {
   role: "user" | "assistant";
@@ -30,7 +31,7 @@ const suggestions = [
   { icon: Layout, label: "Captive Portal Builder", prompt: "__OPEN_PORTAL__" },
   { icon: Workflow, label: "Design my network", prompt: "__OPEN_TOPOLOGY__" },
   { icon: Router, label: "Configure my router", prompt: "__OPEN_DEVICES__" },
-  { icon: Wifi, label: "Setup a hotspot", prompt: "Help me set up a MikroTik hotspot from scratch. Ask me about my device model and RouterOS version first." },
+  { icon: Wifi, label: "Billing & Hotspot Plans", prompt: "__OPEN_BILLING__" },
   { icon: Lightbulb, label: "Brainstorm ideas", prompt: "Help me brainstorm ideas" },
 ];
 
@@ -49,6 +50,7 @@ export const ChatInterface = ({
   const [showPortalBuilder, setShowPortalBuilder] = useState(false);
   const [showTopology, setShowTopology] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
+  const [showBilling, setShowBilling] = useState(false);
   const [savingMessageIdx, setSavingMessageIdx] = useState<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -233,6 +235,14 @@ export const ChatInterface = ({
     return (
       <div className="flex flex-col h-full overflow-hidden">
         <DeviceVault onBack={() => setShowDevices(false)} />
+      </div>
+    );
+  }
+
+  if (showBilling) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <Billing onBack={() => setShowBilling(false)} />
       </div>
     );
   }
