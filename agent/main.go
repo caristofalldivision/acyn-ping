@@ -91,18 +91,6 @@ type portalPayload struct {
 	HtmlDir        string       `json:"html_dir"`        // e.g. "hotspot"
 	Files          []portalFile `json:"files"`
 }
-	Plan struct {
-		BackupName string `json:"backup_name"`
-		Steps      []struct {
-			ID               string   `json:"id"`
-			Title            string   `json:"title"`
-			Kind             string   `json:"kind"`
-			Commands         []string `json:"commands"`
-			RollbackCommands []string `json:"rollback_commands"`
-		} `json:"steps"`
-	} `json:"plan"`
-	Script string `json:"script"`
-}
 
 func main() {
 	if len(os.Args) < 2 {
