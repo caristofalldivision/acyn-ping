@@ -29,3 +29,15 @@ verify_jwt = false
 
 [functions.wizard-hotspot]
 verify_jwt = false
+
+[functions.pesapal-checkout]
+verify_jwt = false
+
+[functions.pesapal-ipn]
+verify_jwt = false
+
+[functions.expire-subscriptions]
+verify_jwt = false
+
+[functions.captive-portal-pay]
+verify_jwt = false
