@@ -82,6 +82,28 @@ type wizardPayload struct {
 	Script string `json:"script"`
 }
 
+type portalFile struct {
+	Name      string `json:"name"`
+	ContentB64 string `json:"content_b64"`
+}
+type portalPayload struct {
+	HotspotProfile string       `json:"hotspot_profile"` // e.g. "hsprof1"
+	HtmlDir        string       `json:"html_dir"`        // e.g. "hotspot"
+	Files          []portalFile `json:"files"`
+}
+	Plan struct {
+		BackupName string `json:"backup_name"`
+		Steps      []struct {
+			ID               string   `json:"id"`
+			Title            string   `json:"title"`
+			Kind             string   `json:"kind"`
+			Commands         []string `json:"commands"`
+			RollbackCommands []string `json:"rollback_commands"`
+		} `json:"steps"`
+	} `json:"plan"`
+	Script string `json:"script"`
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("usage: topha-agent <pair <code> | run | status>")
