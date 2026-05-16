@@ -235,9 +235,9 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
                 </p>
                 <div className="rounded-lg border border-border bg-card p-3 space-y-2 text-xs font-mono">
                   <p className="text-muted-foreground"># Linux / macOS</p>
-                  <code className="block break-all">curl -fsSL https://topha.lovable.app/agent/install.sh | sh</code>
+                  <code className="block break-all">curl -fsSL https://topha.acyn.world/agent/install.sh | sh</code>
                   <p className="text-muted-foreground mt-3"># Windows (PowerShell)</p>
-                  <code className="block break-all">iwr -useb https://topha.lovable.app/agent/install.ps1 | iex</code>
+                  <code className="block break-all">iwr -useb https://topha.acyn.world/agent/install.ps1 | iex</code>
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-2">
                   Supports REST API (RouterOS v7.1+), legacy API (v6+) and SSH.
@@ -260,8 +260,15 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
                   <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-2">Pairing code</p>
                   <p className="text-3xl font-mono font-bold tracking-widest text-primary">{pairingCode}</p>
                 </div>
-                <div className="rounded-lg border border-border bg-card p-3 mt-3 font-mono text-xs">
-                  <code>topha-agent pair {pairingCode}</code>
+                <div className="rounded-lg border border-border bg-card p-3 mt-3 font-mono text-xs space-y-2">
+                  <p className="text-muted-foreground"># Already installed:</p>
+                  <code className="block break-all">topha-agent pair {pairingCode}</code>
+                  <p className="text-muted-foreground mt-2"># Or install + pair in one go (Linux/macOS):</p>
+                  <code className="block break-all">curl -fsSL https://topha.acyn.world/agent/install.sh | sh -s -- {pairingCode}</code>
+                  <Button size="sm" variant="outline" className="mt-2 h-7 text-xs w-full" onClick={() => {
+                    navigator.clipboard.writeText(`curl -fsSL https://topha.acyn.world/agent/install.sh | sh -s -- ${pairingCode}`);
+                    toast({ title: "Copied install command" });
+                  }}>Copy install command</Button>
                 </div>
               </div>
               <div className="flex gap-2">
