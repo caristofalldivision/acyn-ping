@@ -175,6 +175,28 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
+  // Poll device_agents while on step 2 to detect when the agent finishes pairing
+  useEffect(() => {
+    if (step !== 2 || !agentId) return;
+    let stop = false;
+    const tick = async () => {
+      const { data } = await supabase
+        .from("device_agents" as any)
+        .select("status, last_seen_at")
+        .eq("id", agentId)
+        .maybeSingle();
+      if (stop) return;
+      const a = data as any;
+      if (a && a.status && a.status !== "pending") {
+        setAgentOnline(true);
+        toast({ title: "Agent paired ✓", description: "Continue to add your router." });
+      }
+    };
+    const iv = setInterval(tick, 3000);
+    tick();
+    return () => { stop = true; clearInterval(iv); };
+  }, [step, agentId, toast]);
+
   const generateCode = async () => {
     setGenerating(true);
     const { data, error } = await supabase.functions.invoke("device-pair", { body: {} });
