@@ -164,6 +164,8 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
   const [pairingCode, setPairingCode] = useState("");
   const [agentId, setAgentId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [agentOnline, setAgentOnline] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [name, setName] = useState("");
   const [host, setHost] = useState("");
   const [vendor, setVendor] = useState("mikrotik");
@@ -172,6 +174,28 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+
+  // Poll device_agents while on step 2 to detect when the agent finishes pairing
+  useEffect(() => {
+    if (step !== 2 || !agentId) return;
+    let stop = false;
+    const tick = async () => {
+      const { data } = await supabase
+        .from("device_agents" as any)
+        .select("status, last_seen_at")
+        .eq("id", agentId)
+        .maybeSingle();
+      if (stop) return;
+      const a = data as any;
+      if (a && a.status && a.status !== "pending") {
+        setAgentOnline(true);
+        toast({ title: "Agent paired ✓", description: "Continue to add your router." });
+      }
+    };
+    const iv = setInterval(tick, 3000);
+    tick();
+    return () => { stop = true; clearInterval(iv); };
+  }, [step, agentId, toast]);
 
   const generateCode = async () => {
     setGenerating(true);
@@ -270,10 +294,27 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
                     toast({ title: "Copied install command" });
                   }}>Copy install command</Button>
                 </div>
+
+                <div className={`mt-3 rounded-lg border p-3 text-sm flex items-center gap-2 ${agentOnline ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground"}`}>
+                  <span className={`w-2 h-2 rounded-full ${agentOnline ? "bg-primary" : "bg-muted-foreground animate-pulse"}`} />
+                  {agentOnline ? "Agent paired and online ✓" : "Waiting for agent to check in…"}
+                </div>
+
+                <button type="button" onClick={() => setShowHelp(s => !s)} className="text-xs text-muted-foreground underline mt-3">
+                  {showHelp ? "Hide help" : "Need help? (systemd, upgrade, uninstall)"}
+                </button>
+                {showHelp && (
+                  <div className="mt-2 rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground space-y-2">
+                    <p><strong className="text-foreground">Run as a service (Linux):</strong> see <code>agent/README.md</code> for the ready-made systemd unit.</p>
+                    <p><strong className="text-foreground">Upgrade:</strong> re-run the install command — it overwrites the binary in place.</p>
+                    <p><strong className="text-foreground">Uninstall:</strong> <code>sudo rm /usr/local/bin/topha-agent && rm -rf ~/.topha</code></p>
+                    <p><strong className="text-foreground">Binaries:</strong> served from your GitHub Releases. Maintainers cut a release with <code>cd agent && ./release.sh 0.2.0</code>.</p>
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setStep(1)} className="flex-1">Back</Button>
-                <Button onClick={() => setStep(3)} className="flex-1">Next: add router</Button>
+                <Button onClick={() => setStep(3)} className="flex-1">{agentOnline ? "Next: add router" : "Skip & add router anyway"}</Button>
               </div>
             </>
           )}

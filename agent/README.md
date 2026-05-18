@@ -20,6 +20,29 @@ iwr -useb https://topha.acyn.world/agent/install.ps1 | iex
 The installer downloads from GitHub Releases by default. Override with
 `TOPHA_RELEASE_BASE=https://your-host/path` if you self-host the binaries.
 
+## Cut a release (maintainer, one command)
+
+```bash
+cd agent
+./release.sh 0.2.0
+```
+
+That script:
+
+1. Auto-detects your `owner/repo` from `git remote get-url origin`.
+2. Patches `public/agent/install.{sh,ps1}` so their default `RELEASE_BASE` points at your repo's GitHub Releases (commits + pushes if changed).
+3. Creates and pushes the tag `agent-v0.2.0`.
+4. The `.github/workflows/agent-release.yml` workflow then cross-compiles
+   Linux/macOS/Windows binaries via `make all`, generates `SHA256SUMS`, and
+   attaches everything to a GitHub Release. No manual uploads.
+
+You can also trigger the workflow manually: **GitHub → Actions → Agent Release → Run workflow → enter version**.
+
+First-time setup: just make sure GitHub Actions is enabled for the repo
+(Settings → Actions → Allow all actions). No extra secrets required — the
+workflow uses the built-in `GITHUB_TOKEN`.
+
+
 
 ## Build from source
 
