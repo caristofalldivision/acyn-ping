@@ -1,91 +1,78 @@
+# Plan: Ship the Topha Agent to GitHub Releases (guided, end-to-end)
 
-# Plan: Topha v1 — Real install URLs + payments + SMS + captive portal end-to-end
+Goal: make the `curl … install.sh | sh` flow actually work, without you touching a terminal except to copy/paste one command. Since this Lovable project is already connected to GitHub, every file we add here lands in your repo automatically.
 
-## What's broken today
+## What we'll add
 
-1. **Install URLs are fake.** `agent/README.md` tells users to `curl https://topha.lovable.app/agent/install.sh | sh` — but there is no `public/agent/install.sh`, and the Lovable SPA host can't serve dynamic binaries. Same for the PowerShell version. Also: your real domain is `topha.acyn.world`, not `topha.lovable.app`.
-2. **No payment provider wired.** No Pesapal (or any) integration exists. No subscription, expiry, or "paid → activate hotspot user" loop.
-3. **No SMS provider wired.** `send-sms` edge function exists but doesn't target TalkSasa, and there's no trigger on payment/expiry.
-4. **Captive portal builder produces HTML only** — there's no end-to-end "push to MikroTik hotspot directory + activate" path.
+### 1. GitHub Actions workflow that builds + publishes binaries
 
-## Fix plan
+Create `.github/workflows/agent-release.yml`. It:
 
-### A. Real agent install pipeline
+- Triggers on any tag matching `agent-v*` (e.g. `agent-v0.2.0`) **and** on a manual "Run workflow" button in the GitHub UI.
+- Sets up Go 1.22, runs `cd agent && make all` (this already produces `dist/topha-agent-{linux,darwin,windows}-{amd64,arm64}` + `SHA256SUMS`).
+- Uses `softprops/action-gh-release@v2` to create/update a GitHub Release named after the tag and upload every file in `agent/dist/*` as release assets.
+- Uses the built-in `GITHUB_TOKEN` — no extra secrets to configure.
 
-- Add **`public/agent/install.sh`** and **`public/agent/install.ps1`** as static files. They'll be served at `https://topha.acyn.world/agent/install.sh`. The README and Device Vault UI both get updated to use the custom domain.
-- The scripts detect OS/arch and download the prebuilt binary from a **GitHub Releases** URL (set as a const at the top of each script so you can swap to self-hosted if needed).
-- Add **`agent/.github/workflows/release.yml`** that runs `make all` on tag push and uploads `dist/*` to the GH release. (One-time: you push a tag, binaries appear, install scripts work.)
-- Add an in-app **"Copy install command"** button in `DeviceVault.tsx` that copies the right command pre-filled with the pairing code: `curl -fsSL https://topha.acyn.world/agent/install.sh | sh -s -- ABC123`.
+Result: the URL `https://github.com/<you>/<repo>/releases/latest/download/topha-agent-linux-amd64` becomes a real, downloadable file, which is exactly what `public/agent/install.sh` already points at (`RELEASE_BASE` default = `https://github.com/topha/agent/releases/latest/download`).
 
-### B. Pesapal payments (default) — M-Pesa STK + cards
+### 2. Make the install scripts point at YOUR repo, not the placeholder
 
-- New edge function **`pesapal-checkout`**: takes `{plan_id, phone, email}`, hits Pesapal v3 API (`/Transactions/SubmitOrderRequest`), returns redirect URL + tracking ID.
-- New edge function **`pesapal-ipn`**: public webhook Pesapal calls when payment status changes. Validates, updates `subscriptions` row, on `COMPLETED` calls internal `activate-hotspot-user` (creates MikroTik hotspot user via existing agent job) and triggers SMS receipt.
-- New tables:
-  - `plans` (id, name, price_kes, duration_days, bandwidth_profile, is_active)
-  - `subscriptions` (id, user_id?, customer_phone, customer_email, plan_id, device_id, hotspot_username, hotspot_password, status, pesapal_tracking_id, started_at, expires_at)
-  - `payment_events` (id, subscription_id, provider, raw_payload, status, created_at)
-- Daily pg_cron job **`expire-subscriptions`** → marks expired, removes MikroTik hotspot user, sends SMS warning at T-24h and T-0.
-- Secrets to add: `PESAPAL_CONSUMER_KEY`, `PESAPAL_CONSUMER_SECRET`, `PESAPAL_IPN_ID` (you'll register the IPN URL in Pesapal dashboard and paste the ID back).
-- UI: **`src/components/Billing.tsx`** — plan picker, phone input, "Pay with M-Pesa", subscription list with status + expiry.
+Right now `install.sh` and `install.ps1` default to `https://github.com/topha/agent/releases/latest/download` (a repo that doesn't exist). We'll:
 
-### C. TalkSasa SMS (default)
+- Replace that default with a placeholder we ask you to confirm: `https://github.com/<your-gh-user>/<your-repo>/releases/latest/download`.
+- Keep `TOPHA_RELEASE_BASE` env var as the override for self-hosting.
 
-- Rewrite **`send-sms`** edge function to call TalkSasa API (`https://bulksms.talksasa.com/api/v3/sms/send`) with `Authorization: Bearer <TALKSASA_API_KEY>`, sender ID configurable.
-- Auto-trigger SMS on: payment success (receipt + Wi-Fi credentials), 24h before expiry (warn), expiry (offer renewal link).
-- Secrets to add: `TALKSASA_API_KEY`, `TALKSASA_SENDER_ID`.
-- Settings panel: let user override sender ID and toggle which events SMS fires for.
+I need one piece of info from you for this step — see the question I'll ask after the plan.
 
-### D. Captive portal end-to-end deploy
+### 3. In-app "Install the agent" guided wizard
 
-- Extend **`CaptivePortalBuilder.tsx`** with a **"Deploy to router"** action that:
-  1. Bundles the generated `login.html`, `alogin.html`, `logout.html`, `rlogin.html`, CSS, images into a job payload.
-  2. Creates a `device_jobs` row with kind `deploy_portal` and the payload as `script_content` (base64 tarball).
-- Extend **`agent/main.go`** with a `deploy_portal` handler: uploads each file via SFTP to `/hotspot/` (SSH) or via REST `/file` (RouterOS v7), then runs `/ip hotspot profile set [find name=hsprof1] html-directory=hotspot` and restarts the hotspot service.
-- Add **"Hotspot users"** tab in DeviceVault that lists MikroTik hotspot users (read via agent) and lets you manually add/disable — backing the same flow Pesapal uses.
+New component `src/components/AgentInstallWizard.tsx`, opened from a button in `DeviceVault.tsx`. Four steps, each with a copy button:
 
-### E. Verification (must pass before I claim done)
+1. **Generate pairing code** — calls the existing `device-pair` function, shows the 6-char code.
+2. **Pick your OS** — Linux/macOS/Windows tabs.
+3. **Copy & run one command** — pre-filled with the pairing code, e.g.
+   `curl -fsSL https://topha.acyn.world/agent/install.sh | sh -s -- ABC123`
+4. **Waiting for agent…** — polls `device_agents` table; flips to ✅ "Agent online" the moment the agent pairs + checks in. Then shows a "Continue → Add your first router" button that jumps to the existing add-device flow.
 
-1. `curl -I https://topha.acyn.world/agent/install.sh` → 200.
-2. `supabase--curl_edge_functions pesapal-checkout` with test payload → returns Pesapal redirect URL.
-3. Pesapal sandbox IPN → row in `subscriptions` flips to `active`, `device_jobs` gets an `apply_script` row that adds the hotspot user.
-4. TalkSasa test send → 200, message visible in TalkSasa dashboard.
-5. Captive portal deploy job → agent log shows files uploaded, MikroTik `/ip hotspot profile print` shows new html-directory.
-6. End-to-end on a real MikroTik: scan QR → portal → pay via M-Pesa STK → SMS receipt → internet works → 24h later SMS warns → at expiry SMS arrives + user disabled.
+### 4. One-page docs panel inside the app
+
+New `src/components/AgentHelp.tsx` (small markdown-style panel inside the wizard's "Need help?" disclosure):
+- How to run as a systemd service (the snippet already in `agent/README.md`).
+- How to upgrade (`curl … install.sh | sh` again).
+- How to uninstall.
+- Link to the GitHub Release page (so you can verify what's published).
+
+### 5. One-time release helper script
+
+Add `agent/release.sh` so you (or anyone) can cut a release with one command:
+
+```bash
+cd agent && ./release.sh 0.2.0
+```
+
+It runs `git tag agent-v0.2.0 && git push origin agent-v0.2.0`, which triggers the workflow above. No manual binary uploads ever.
+
+## How you actually use this once it's built
+
+1. Approve the plan. I make all the files.
+2. The files sync to GitHub automatically (you're already connected).
+3. In GitHub, go to **Actions → "Agent Release" → Run workflow** (or run `agent/release.sh 0.2.0` locally). First run takes ~3 minutes.
+4. Confirm at `https://github.com/<you>/<repo>/releases/latest` that the 5 binaries + SHA256SUMS are attached.
+5. In the Topha app, open **Device Vault → Install agent** and follow the 4-step wizard. Done.
 
 ## Technical details
 
-**Files created**
-- `public/agent/install.sh`, `public/agent/install.ps1`
-- `agent/.github/workflows/release.yml`
-- `supabase/functions/pesapal-checkout/index.ts`
-- `supabase/functions/pesapal-ipn/index.ts`
-- `supabase/functions/activate-hotspot-user/index.ts`
-- `supabase/functions/expire-subscriptions/index.ts` (pg_cron target)
-- `src/components/Billing.tsx`, `src/components/HotspotUsers.tsx`
-- migration: `plans`, `subscriptions`, `payment_events` + RLS + cron job
+- **Files created**: `.github/workflows/agent-release.yml`, `agent/release.sh`, `src/components/AgentInstallWizard.tsx`, `src/components/AgentHelp.tsx`.
+- **Files edited**: `public/agent/install.sh`, `public/agent/install.ps1` (real default `RELEASE_BASE`), `src/components/DeviceVault.tsx` (button to open wizard), `agent/README.md` (point to wizard, mention `release.sh`).
+- **No DB migrations**, no new secrets, no edge function changes.
+- **Compatibility**: workflow uses only first-party / well-known Actions (`actions/checkout@v4`, `actions/setup-go@v5`, `softprops/action-gh-release@v2`).
 
-**Files edited**
-- `agent/README.md` (real URLs)
-- `agent/main.go` (`deploy_portal` handler, SFTP upload)
-- `supabase/functions/send-sms/index.ts` (TalkSasa)
-- `src/components/DeviceVault.tsx` ("Copy install command", Hotspot Users tab link)
-- `src/components/CaptivePortalBuilder.tsx` ("Deploy to router" button)
-- `src/pages/Index.tsx` (new Billing route/tab)
-- `supabase/config.toml` (expose new functions)
+## Out of scope (ask if you want them)
 
-**Out of scope (ping me to add)**
-- Card/Airtel routes for Pesapal (works automatically since Pesapal handles them, but no separate UI)
-- SMS provider fallback (Africa's Talking as backup if TalkSasa down)
-- Multi-tenant ISP billing / per-ISP Pesapal subaccounts
-- Auto-renewal cards (Pesapal recurring tokens)
+- Code-signing the macOS/Windows binaries (Apple notarization, Windows Authenticode) — not needed for self-install, but reduces SmartScreen warnings.
+- Auto-update inside the agent itself.
+- Homebrew tap / `winget` manifest.
 
-## Order of execution
-1. Migration (plans/subscriptions/payment_events) — needs your approval
-2. Secrets prompt (Pesapal x3, TalkSasa x2)
-3. Edge functions + SMS rewrite + install scripts + README
-4. Agent `deploy_portal` handler + GH Actions
-5. UI (Billing, Hotspot Users, install command copy, portal deploy button)
-6. Run verification checklist E1–E5 (E6 requires real hardware — I'll give you the runbook)
+## One thing I need from you before I start
 
-Reply **"go"** to start, or tell me what to change first.
+I need your GitHub `owner/repo` (e.g. `johndoe/topha`) so the install scripts point at the right Releases URL. I'll ask this right after you approve the plan.
