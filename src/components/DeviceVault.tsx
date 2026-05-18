@@ -164,6 +164,8 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
   const [pairingCode, setPairingCode] = useState("");
   const [agentId, setAgentId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [agentOnline, setAgentOnline] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [name, setName] = useState("");
   const [host, setHost] = useState("");
   const [vendor, setVendor] = useState("mikrotik");
