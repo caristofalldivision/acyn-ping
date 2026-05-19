@@ -5,7 +5,7 @@
 #   curl -fsSL https://topha.acyn.world/agent/install.sh | sh -s -- <PAIRING_CODE>
 set -e
 
-RELEASE_BASE="${TOPHA_RELEASE_BASE:-https://github.com/topha/agent/releases/latest/download}"
+RELEASE_BASE="${TOPHA_RELEASE_BASE:-https://github.com/caristofalldivision/topha/releases/latest/download}"
 INSTALL_DIR="${TOPHA_INSTALL_DIR:-/usr/local/bin}"
 BIN="topha-agent"
 

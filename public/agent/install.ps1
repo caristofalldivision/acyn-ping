@@ -4,7 +4,7 @@
 #   $code="ABC123"; iwr -useb https://topha.acyn.world/agent/install.ps1 | iex
 $ErrorActionPreference = "Stop"
 
-$ReleaseBase = if ($env:TOPHA_RELEASE_BASE) { $env:TOPHA_RELEASE_BASE } else { "https://github.com/topha/agent/releases/latest/download" }
+$ReleaseBase = if ($env:TOPHA_RELEASE_BASE) { $env:TOPHA_RELEASE_BASE } else { "https://github.com/caristofalldivision/topha/releases/latest/download" }
 $InstallDir  = if ($env:TOPHA_INSTALL_DIR)  { $env:TOPHA_INSTALL_DIR }  else { "$env:LOCALAPPDATA\Topha" }
 $Bin = "topha-agent.exe"
 
