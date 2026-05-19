@@ -1,20 +1,47 @@
 # Topha Agent installer (Windows / PowerShell)
-# Usage:
+# Usage (install only):
 #   iwr -useb https://topha.acyn.world/agent/install.ps1 | iex
-#   $code="ABC123"; iwr -useb https://topha.acyn.world/agent/install.ps1 | iex
+#
+# Usage (install + pair in one go):
+#   $env:TOPHA_CODE="ABC123"; iwr -useb https://topha.acyn.world/agent/install.ps1 | iex
 $ErrorActionPreference = "Stop"
 
 $ReleaseBase = if ($env:TOPHA_RELEASE_BASE) { $env:TOPHA_RELEASE_BASE } else { "https://github.com/caristofalldivision/topha/releases/latest/download" }
 $InstallDir  = if ($env:TOPHA_INSTALL_DIR)  { $env:TOPHA_INSTALL_DIR }  else { "$env:LOCALAPPDATA\Topha" }
 $Bin = "topha-agent.exe"
+$PairCode = if ($env:TOPHA_CODE) { $env:TOPHA_CODE } elseif ($code) { $code } else { $null }
+
+# Force TLS 1.2 (required on older Windows / PS5)
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
 
 $arch = if ([Environment]::Is64BitOperatingSystem) { "amd64" } else { "386" }
 $url  = "$ReleaseBase/topha-agent-windows-$arch.exe"
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 $dest = Join-Path $InstallDir $Bin
-Write-Host "→ Downloading $url"
-Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
+Write-Host "Downloading $url"
+
+try {
+  Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing -MaximumRedirection 10
+} catch {
+  Write-Host ""
+  Write-Host "Download failed: $($_.Exception.Message)" -ForegroundColor Red
+  Write-Host ""
+  Write-Host "This usually means the agent binary has not been published yet to GitHub Releases."
+  Write-Host "Fix: the project owner needs to run the 'Agent Release' workflow once:"
+  Write-Host "  https://github.com/caristofalldivision/topha/actions/workflows/agent-release.yml"
+  Write-Host "Then click 'Run workflow', enter version (e.g. 0.2.0), and wait ~3 minutes."
+  Write-Host ""
+  Write-Host "Or override the source URL: `$env:TOPHA_RELEASE_BASE='https://your-host/path'"
+  exit 1
+}
+
+if ((Get-Item $dest).Length -lt 100000) {
+  Write-Host "Downloaded file is suspiciously small — the URL probably returned an HTML 404 page." -ForegroundColor Red
+  Write-Host "Check that a release exists at: $ReleaseBase"
+  Remove-Item $dest -Force
+  exit 1
+}
 
 # Add to PATH for current user
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -22,11 +49,13 @@ if ($userPath -notlike "*$InstallDir*") {
   [Environment]::SetEnvironmentVariable("Path", "$userPath;$InstallDir", "User")
   $env:Path = "$env:Path;$InstallDir"
 }
-Write-Host "✓ Installed $dest"
+Write-Host "Installed $dest"
 
-if ($code) {
-  Write-Host "→ Pairing with code $code"
-  & $dest pair $code
+if ($PairCode) {
+  Write-Host "Pairing with code $PairCode"
+  & $dest pair $PairCode
+  Write-Host ""
+  Write-Host "Next: run 'topha-agent run' to start polling for jobs."
 } else {
   Write-Host ""
   Write-Host "Next:"

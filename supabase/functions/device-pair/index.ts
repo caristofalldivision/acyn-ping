@@ -3,7 +3,7 @@
 //   POST /device-pair/claim  (no auth)        body: { pairing_code, agent_name }
 //                                              -> { agent_id, agent_secret }
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { corsHeaders } from "../_shared/cors.ts";
 
 function rand(len: number) {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";

@@ -1,78 +1,42 @@
-# Plan: Ship the Topha Agent to GitHub Releases (guided, end-to-end)
+## What is failing
 
-Goal: make the `curl … install.sh | sh` flow actually work, without you touching a terminal except to copy/paste one command. Since this Lovable project is already connected to GitHub, every file we add here lands in your repo automatically.
+- The live domain `https://topha.acyn.world/agent/install.ps1` is still serving the old installer that points to `https://github.com/topha/agent/...`.
+- The correct repo URL in the codebase is `https://github.com/caristofalldivision/topha/...`, but those frontend/static files have not been published to the live custom domain yet.
+- The GitHub binary URL for `caristofalldivision/topha` currently returns 404, so the first agent release binary is not available yet.
+- The deployed backend function `device-pair` is returning “function not found”, so pairing cannot work until the agent backend functions are deployed.
 
-## What we'll add
+## Implementation plan
 
-### 1. GitHub Actions workflow that builds + publishes binaries
+1. Deploy and harden the backend agent functions
+   - Deploy these backend functions immediately:
+     - `device-pair`
+     - `device-jobs`
+     - `device-agent-bridge`
+   - Fix any deploy/import issue found during deployment.
+   - Re-test `device-pair/claim` with an invalid code and confirm it returns a clean JSON error instead of “function not found”.
 
-Create `.github/workflows/agent-release.yml`. It:
+2. Fix installer reliability and live-domain mismatch
+   - Keep the repo default as `https://github.com/caristofalldivision/topha/releases/latest/download` in both installers.
+   - Improve `install.ps1` so GitHub 404/connection failures show a clear message instead of a raw PowerShell exception.
+   - Add a Windows one-command install-and-pair path in the UI, because the current UI only shows install-and-pair for Linux/macOS.
+   - Update installer help text to tell you exactly what to do if binaries are missing.
 
-- Triggers on any tag matching `agent-v*` (e.g. `agent-v0.2.0`) **and** on a manual "Run workflow" button in the GitHub UI.
-- Sets up Go 1.22, runs `cd agent && make all` (this already produces `dist/topha-agent-{linux,darwin,windows}-{amd64,arm64}` + `SHA256SUMS`).
-- Uses `softprops/action-gh-release@v2` to create/update a GitHub Release named after the tag and upload every file in `agent/dist/*` as release assets.
-- Uses the built-in `GITHUB_TOKEN` — no extra secrets to configure.
+3. Make the release workflow produce the missing binaries
+   - Verify `.github/workflows/agent-release.yml` builds the exact filenames the installers download:
+     - `topha-agent-windows-amd64.exe`
+     - `topha-agent-linux-amd64`
+     - `topha-agent-linux-arm64`
+     - `topha-agent-darwin-amd64`
+     - `topha-agent-darwin-arm64`
+   - If needed, adjust the workflow so manual “Run workflow” creates/uses tag `agent-v<version>` and attaches the binaries reliably.
 
-Result: the URL `https://github.com/<you>/<repo>/releases/latest/download/topha-agent-linux-amd64` becomes a real, downloadable file, which is exactly what `public/agent/install.sh` already points at (`RELEASE_BASE` default = `https://github.com/topha/agent/releases/latest/download`).
+4. Validate end-to-end pairing path
+   - Test deployed `device-pair` function behavior.
+   - Confirm the app’s “Generate pairing code” call targets the deployed function.
+   - Confirm the Go agent’s `pair` command posts to `/device-pair/claim`, saves `agent_id` and `agent_secret`, and then `run` can authenticate against `/device-jobs/pending`.
+   - Fix any backend response, CORS, or routing issues found.
 
-### 2. Make the install scripts point at YOUR repo, not the placeholder
-
-Right now `install.sh` and `install.ps1` default to `https://github.com/topha/agent/releases/latest/download` (a repo that doesn't exist). We'll:
-
-- Replace that default with a placeholder we ask you to confirm: `https://github.com/<your-gh-user>/<your-repo>/releases/latest/download`.
-- Keep `TOPHA_RELEASE_BASE` env var as the override for self-hosting.
-
-I need one piece of info from you for this step — see the question I'll ask after the plan.
-
-### 3. In-app "Install the agent" guided wizard
-
-New component `src/components/AgentInstallWizard.tsx`, opened from a button in `DeviceVault.tsx`. Four steps, each with a copy button:
-
-1. **Generate pairing code** — calls the existing `device-pair` function, shows the 6-char code.
-2. **Pick your OS** — Linux/macOS/Windows tabs.
-3. **Copy & run one command** — pre-filled with the pairing code, e.g.
-   `curl -fsSL https://topha.acyn.world/agent/install.sh | sh -s -- ABC123`
-4. **Waiting for agent…** — polls `device_agents` table; flips to ✅ "Agent online" the moment the agent pairs + checks in. Then shows a "Continue → Add your first router" button that jumps to the existing add-device flow.
-
-### 4. One-page docs panel inside the app
-
-New `src/components/AgentHelp.tsx` (small markdown-style panel inside the wizard's "Need help?" disclosure):
-- How to run as a systemd service (the snippet already in `agent/README.md`).
-- How to upgrade (`curl … install.sh | sh` again).
-- How to uninstall.
-- Link to the GitHub Release page (so you can verify what's published).
-
-### 5. One-time release helper script
-
-Add `agent/release.sh` so you (or anyone) can cut a release with one command:
-
-```bash
-cd agent && ./release.sh 0.2.0
-```
-
-It runs `git tag agent-v0.2.0 && git push origin agent-v0.2.0`, which triggers the workflow above. No manual binary uploads ever.
-
-## How you actually use this once it's built
-
-1. Approve the plan. I make all the files.
-2. The files sync to GitHub automatically (you're already connected).
-3. In GitHub, go to **Actions → "Agent Release" → Run workflow** (or run `agent/release.sh 0.2.0` locally). First run takes ~3 minutes.
-4. Confirm at `https://github.com/<you>/<repo>/releases/latest` that the 5 binaries + SHA256SUMS are attached.
-5. In the Topha app, open **Device Vault → Install agent** and follow the 4-step wizard. Done.
-
-## Technical details
-
-- **Files created**: `.github/workflows/agent-release.yml`, `agent/release.sh`, `src/components/AgentInstallWizard.tsx`, `src/components/AgentHelp.tsx`.
-- **Files edited**: `public/agent/install.sh`, `public/agent/install.ps1` (real default `RELEASE_BASE`), `src/components/DeviceVault.tsx` (button to open wizard), `agent/README.md` (point to wizard, mention `release.sh`).
-- **No DB migrations**, no new secrets, no edge function changes.
-- **Compatibility**: workflow uses only first-party / well-known Actions (`actions/checkout@v4`, `actions/setup-go@v5`, `softprops/action-gh-release@v2`).
-
-## Out of scope (ask if you want them)
-
-- Code-signing the macOS/Windows binaries (Apple notarization, Windows Authenticode) — not needed for self-install, but reduces SmartScreen warnings.
-- Auto-update inside the agent itself.
-- Homebrew tap / `winget` manifest.
-
-## One thing I need from you before I start
-
-I need your GitHub `owner/repo` (e.g. `johndoe/topha`) so the install scripts point at the right Releases URL. I'll ask this right after you approve the plan.
+5. Final instructions for you
+   - After code/backend fixes, I’ll give you the exact GitHub click path to create the first release.
+   - You will still need to click **Publish/Update** for the live `topha.acyn.world` installer files to change, because static frontend files do not go live automatically.
+   - Backend functions deploy automatically/immediately once fixed.

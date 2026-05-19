@@ -287,12 +287,14 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
                 <div className="rounded-lg border border-border bg-card p-3 mt-3 font-mono text-xs space-y-2">
                   <p className="text-muted-foreground"># Already installed:</p>
                   <code className="block break-all">topha-agent pair {pairingCode}</code>
-                  <p className="text-muted-foreground mt-2"># Or install + pair in one go (Linux/macOS):</p>
+                  <p className="text-muted-foreground mt-2"># Install + pair in one go (Linux / macOS):</p>
                   <code className="block break-all">curl -fsSL https://topha.acyn.world/agent/install.sh | sh -s -- {pairingCode}</code>
+                  <p className="text-muted-foreground mt-2"># Install + pair in one go (Windows PowerShell):</p>
+                  <code className="block break-all">{`$env:TOPHA_CODE="${pairingCode}"; iwr -useb https://topha.acyn.world/agent/install.ps1 | iex`}</code>
                   <Button size="sm" variant="outline" className="mt-2 h-7 text-xs w-full" onClick={() => {
                     navigator.clipboard.writeText(`curl -fsSL https://topha.acyn.world/agent/install.sh | sh -s -- ${pairingCode}`);
-                    toast({ title: "Copied install command" });
-                  }}>Copy install command</Button>
+                    toast({ title: "Copied Linux/macOS install command" });
+                  }}>Copy Linux/macOS command</Button>
                 </div>
 
                 <div className={`mt-3 rounded-lg border p-3 text-sm flex items-center gap-2 ${agentOnline ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground"}`}>
