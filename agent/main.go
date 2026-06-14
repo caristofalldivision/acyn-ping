@@ -95,7 +95,7 @@ type portalPayload struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("usage: topha-agent <pair <code> | run | status>")
+		fmt.Println("usage: topha-agent <pair <code> | run | status | doctor>")
 		os.Exit(1)
 	}
 	switch os.Args[1] {
@@ -115,9 +115,43 @@ func main() {
 			die(err.Error())
 		}
 		fmt.Printf("agent_id=%s base=%s\n", c.AgentID, c.BaseURL)
+	case "doctor":
+		runDoctor()
 	default:
 		die("unknown command: " + os.Args[1])
 	}
+}
+
+func runDoctor() {
+	fmt.Println("== topha-agent doctor ==")
+	c, err := loadConfig()
+	if err != nil {
+		fmt.Println("[FAIL] pairing config:", err)
+		fmt.Println("       fix: run 'topha-agent pair <CODE>' (get code from Topha → Device Vault)")
+		return
+	}
+	fmt.Printf("[ OK ] pairing config loaded · agent_id=%s\n", c.AgentID)
+	fmt.Printf("[ .. ] backend reachability: %s\n", c.BaseURL)
+	req, _ := http.NewRequest("GET", c.BaseURL+"/device-jobs/pending", nil)
+	req.Header.Set("X-Agent-Id", c.AgentID)
+	req.Header.Set("X-Agent-Secret", c.AgentSecret)
+	resp, err := httpClient().Do(req)
+	if err != nil {
+		fmt.Println("[FAIL] backend call:", err)
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	switch resp.StatusCode {
+	case 200:
+		fmt.Println("[ OK ] backend accepted agent credentials")
+	case 401:
+		fmt.Println("[FAIL] backend rejected agent credentials (401). Re-pair the agent.")
+		fmt.Println("       body:", string(body))
+	default:
+		fmt.Printf("[WARN] backend returned %d: %s\n", resp.StatusCode, body)
+	}
+	fmt.Println("done.")
 }
 
 // ---------------- pairing ----------------
