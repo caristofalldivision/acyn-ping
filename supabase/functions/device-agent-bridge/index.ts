@@ -1,4 +1,4 @@
-// WebSocket bridge between the Topha Agent (running on the ISP's LAN) and Supabase.
+// WebSocket bridge between the Ping Agent (running on the ISP's LAN) and Supabase.
 //
 // Connect:   wss://<project>.functions.supabase.co/device-agent-bridge?agent_id=...&secret=...
 //
@@ -28,8 +28,8 @@ const agents = new Map<string, { socket: WebSocket; userId: string }>();
 // Track the active job the agent is processing
 const jobOwners = new Map<string, string>(); // job_id -> agent_id
 
-(globalThis as any).__topha_agents = agents;
-(globalThis as any).__topha_jobs = jobOwners;
+(globalThis as any).__ping_agents = agents;
+(globalThis as any).__ping_jobs = jobOwners;
 
 async function sha256(s: string) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));

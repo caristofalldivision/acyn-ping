@@ -97,7 +97,7 @@ export const CalendarView = () => {
             }}
           />
           <p className="text-xs text-muted-foreground mt-3 text-center">
-            Ask Topha to schedule events: "Schedule a meeting tomorrow at 3pm"
+            Ask Ping to schedule events: "Schedule a meeting tomorrow at 3pm"
           </p>
         </CardContent>
       </Card>
@@ -115,7 +115,7 @@ export const CalendarView = () => {
                 <CalendarDays className="h-12 w-12 mb-3 opacity-50" />
                 <p className="text-sm">No events scheduled</p>
                 <p className="text-xs mt-1">
-                  Ask Topha to create one
+                  Ask Ping to create one
                 </p>
               </div>
             ) : (

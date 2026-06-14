@@ -1,8 +1,8 @@
-# Topha Agent v0.2
+# Ping Agent v0.2
 
-A small Go program that runs on a machine on your LAN, dials out to Topha,
+A small Go program that runs on a machine on your LAN, dials out to Ping,
 and executes config jobs against your MikroTik routers. Works behind
-CGNAT/NAT — Topha never needs your router's public IP.
+CGNAT/NAT — Ping never needs your router's public IP.
 
 ## Install (prebuilt binary)
 
@@ -14,12 +14,12 @@ curl -fsSL https://ping.echoisp.click/agent/install.sh | sh
 curl -fsSL https://ping.echoisp.click/agent/install.sh | sh -s -- <PAIRING_CODE>
 
 # Windows (PowerShell) — install + pair
-$env:TOPHA_CODE="<PAIRING_CODE>"; iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex
+$env:PING_CODE="<PAIRING_CODE>"; iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex
 ```
 
 Mirror: `https://ping.acyninnovation.com`. The installer downloads the binary
 from GitHub Releases by default. Override with
-`TOPHA_RELEASE_BASE=https://your-host/path` if you self-host the binaries.
+`PING_RELEASE_BASE=https://your-host/path` if you self-host the binaries.
 
 ## Prepare your MikroTik (in Winbox)
 
@@ -31,11 +31,11 @@ Open Winbox → New Terminal and paste:
 # Optional REST API (RouterOS v7.1+):
 /ip service enable www-ssl
 # Dedicated agent user:
-/user group add name=topha policy=read,write,policy,test,api,ssh,rest-api,sensitive
-/user add name=topha group=topha password=STRONGPASS
+/user group add name=ping policy=read,write,policy,test,api,ssh,rest-api,sensitive
+/user add name=ping group=ping password=STRONGPASS
 ```
 
-Use the `topha` user and password when adding the router in Topha.
+Use the `ping` user and password when adding the router in Ping.
 
 ## Cut a release (maintainer, one command)
 
@@ -81,34 +81,34 @@ make all          # cross-compile linux/darwin/windows + checksums into dist/
 
 ## Pair (one time)
 
-In Topha → **Device Vault → Add Router**, click *Generate pairing code*. Then:
+In Ping → **Device Vault → Add Router**, click *Generate pairing code*. Then:
 
 ```bash
-./topha-agent pair ABC123
+./ping-agent pair ABC123
 ```
 
-This stores `agent_id` + `agent_secret` in `~/.topha/agent.json` (mode 0600).
+This stores `agent_id` + `agent_secret` in `~/.ping/agent.json` (mode 0600).
 
 ## Run
 
 ```bash
-./topha-agent run
+./ping-agent run
 ```
 
-Polls `https://<topha>/functions/v1/device-jobs/pending` every 5 seconds.
+Polls `https://<ping>/functions/v1/device-jobs/pending` every 5 seconds.
 Run as a systemd service in production:
 
 ```ini
-# /etc/systemd/system/topha-agent.service
+# /etc/systemd/system/ping-agent.service
 [Unit]
-Description=Topha Agent
+Description=Ping Agent
 After=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/topha-agent run
+ExecStart=/usr/local/bin/ping-agent run
 Restart=always
 RestartSec=5
-User=topha
+User=ping
 
 [Install]
 WantedBy=multi-user.target
@@ -122,17 +122,17 @@ WantedBy=multi-user.target
 | `apply_script`   | Runs each non-comment line as a CLI command, stops on first error |
 | `take_backup`    | `/system backup save name=<provided or auto>` |
 | `restore_backup` | `/system backup load name=<provided>` |
-| `wizard_hotspot` | Runs structured plan (from Topha's hotspot wizard); auto-rollback on failure |
+| `wizard_hotspot` | Runs structured plan (from Ping's hotspot wizard); auto-rollback on failure |
 
 ## Drivers
 
 - **SSH** (default) — works on RouterOS v6 and v7. Uses username/password.
 - **REST** — RouterOS v7.1+, uses HTTPS basic auth on port 443. Set the
-  device's `connection_method` to `rest` in Topha.
+  device's `connection_method` to `rest` in Ping.
 
 ## Security notes (v0.1)
 
-- Credentials are stored in Topha's DB unencrypted in this preview build —
+- Credentials are stored in Ping's DB unencrypted in this preview build —
   add `DEVICE_CRED_KEY` + pgcrypto in a follow-up before wider rollout.
 - SSH host key verification is currently disabled (`InsecureIgnoreHostKey`).
   Pin the router's host key before going to production.
@@ -141,6 +141,6 @@ WantedBy=multi-user.target
 ## Override the bridge URL (dev / self-host)
 
 ```bash
-export TOPHA_BASE_URL=https://my-self-hosted.example.com/functions/v1
-./topha-agent pair ABC123
+export PING_BASE_URL=https://my-self-hosted.example.com/functions/v1
+./ping-agent pair ABC123
 ```

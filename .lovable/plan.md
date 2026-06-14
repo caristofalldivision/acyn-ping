@@ -1,11 +1,11 @@
 ## Findings
 
 - `https://ping.echoisp.click/agent/install.ps1` and `https://ping.acyninnovation.com/agent/install.ps1` currently return `DEPLOYMENT_NOT_FOUND`, so those domains are not serving this Lovable app yet.
-- The public GitHub release page for `caristofalldivision/topha` still returns 404, so the installer has no binary to download.
+- The public GitHub release page for `caristofalldivision/ping` still returns 404, so the installer has no binary to download.
 - The hosted backend is healthy.
 - `device-pair/claim` now responds with clean JSON errors, and `device-jobs/pending` returns clean unauthorized JSON for bad agent credentials, so the functions are reachable.
 - Database API grants for `device_agents`, `devices`, and `device_jobs` appear missing even though policies exist; this can break UI reads/writes and pairing status updates.
-- The app UI still shows old `topha.acyn.world` commands, not the new `ping.echoisp.click` / `ping.acyninnovation.com` domains.
+- The app UI still shows old `ping.acyn.world` commands, not the new `ping.echoisp.click` / `ping.acyninnovation.com` domains.
 - The agent supports SSH and REST, but the UI offers “legacy API” even though the agent currently falls that option back to SSH.
 - “Configure via Winbox easily” means the agent should guide users to enable the same RouterOS services Winbox users normally manage: SSH/API/REST and a dedicated admin user, without requiring direct public router access.
 
@@ -19,16 +19,16 @@
 2. Make domains consistent in app and docs
    - Update Device Vault install/pair commands to use `https://ping.echoisp.click` as the primary installer domain.
    - Add a secondary note/command for `https://ping.acyninnovation.com` only if needed as an alternate mirror.
-   - Update agent README references from `topha.acyn.world` to the new primary domain.
+   - Update agent README references from `ping.acyn.world` to the new primary domain.
    - Keep backend calls inside the agent pointed to the Lovable Cloud functions URL, because that is the actual API endpoint the binary must call.
 
 3. Make Windows install-and-pair robust
    - Improve `install.ps1` to:
      - Force modern TLS.
-     - Support `$env:TOPHA_CODE` and `-code` style pairing.
+     - Support `$env:PING_CODE` and `-code` style pairing.
      - Fail with clear messages if the GitHub release asset is missing.
      - Verify that the downloaded file is an EXE, not a GitHub 404 HTML page.
-     - Show `topha-agent status` and next commands after install.
+     - Show `ping-agent status` and next commands after install.
    - Add a Windows copy button in the UI beside the Linux/macOS copy button.
 
 4. Stop offering unsupported “legacy API” until implemented
@@ -42,12 +42,12 @@
    - Add a compact “Prepare MikroTik in Winbox” section in the Add Router flow with copy-paste RouterOS commands:
      - Enable SSH.
      - Optionally enable REST API on RouterOS v7.1+.
-     - Create a dedicated `topha` group/user with required permissions.
+     - Create a dedicated `ping` group/user with required permissions.
      - Restrict service access to LAN/subnet where possible.
    - Keep it short and operational, not a marketing explanation.
 
 6. Improve agent diagnostics for real support
-   - Add `topha-agent doctor` command that checks:
+   - Add `ping-agent doctor` command that checks:
      - Pairing config exists.
      - Backend `/device-jobs/pending` accepts the saved credentials.
      - Optional router reachability when host/user/pass/method are supplied.
@@ -65,7 +65,7 @@
 
 Even after code fixes, the installer cannot download until one of these is true:
 
-- The `caristofalldivision/topha` GitHub release exists and contains `topha-agent-windows-amd64.exe`, or
+- The `caristofalldivision/ping` GitHub release exists and contains `ping-agent-windows-amd64.exe`, or
 - We move binaries to an app-hosted/static download location.
 
 Also, `ping.echoisp.click` and `ping.acyninnovation.com` must be connected/published to this Lovable app before those URLs can serve `/agent/install.ps1`.

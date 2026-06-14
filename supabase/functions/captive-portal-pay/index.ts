@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     const { data: plan } = await admin.from('plans').select('*').eq('id', plan_id).eq('user_id', device.user_id).maybeSingle()
     if (!plan) return json({ error: 'plan not found' }, 404)
 
-    const merchantRef = 'TOPHA-' + crypto.randomUUID().slice(0, 8)
+    const merchantRef = 'PING-' + crypto.randomUUID().slice(0, 8)
     const { data: sub, error } = await admin.from('subscriptions').insert({
       user_id: device.user_id, device_id, plan_id, customer_phone: phone, customer_email: email || null,
       amount_kes: plan.price_kes, pesapal_merchant_ref: merchantRef, status: 'pending',
@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
         description: `${settings.business_name || 'WiFi'} - ${plan.name}`,
         callback_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/pesapal-ipn?return=1`,
         notification_id: settings.pesapal_ipn_id,
-        billing_address: { phone_number: phone, email_address: email || `${phone}@topha.local` },
+        billing_address: { phone_number: phone, email_address: email || `${phone}@ping.local` },
       }),
     }).then((r) => r.json())
     if (!order.redirect_url) {

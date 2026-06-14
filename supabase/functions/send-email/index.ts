@@ -65,13 +65,13 @@ serve(async (req: Request): Promise<Response> => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: from || "Topha <onboarding@resend.dev>",
+        from: from || "Ping <onboarding@resend.dev>",
         to: [to],
         subject: subject,
         html: `<div style="font-family: sans-serif; padding: 20px;">
           ${body.replace(/\n/g, "<br>")}
           <br><br>
-          <p style="color: #666; font-size: 12px;">Sent via Topha Assistant</p>
+          <p style="color: #666; font-size: 12px;">Sent via Ping Assistant</p>
         </div>`,
       }),
     });

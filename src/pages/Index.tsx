@@ -122,7 +122,7 @@ const Index = () => {
           <div className="h-14 px-4 flex items-center justify-between border-b border-border">
             <div className="flex items-center gap-2">
               <Brain className="w-5 h-5 text-primary" />
-              <span className="font-semibold text-foreground">Topha</span>
+              <span className="font-semibold text-foreground">Ping</span>
             </div>
             <Button
               variant="ghost"
@@ -176,7 +176,7 @@ const Index = () => {
               <SheetContent side="left" className="p-0 w-[280px] bg-sidebar-background border-border">
                 <div className="h-14 px-4 flex items-center gap-2 border-b border-border">
                   <Brain className="w-5 h-5 text-primary" />
-                  <span className="font-semibold text-foreground">Topha</span>
+                  <span className="font-semibold text-foreground">Ping</span>
                 </div>
                 <ConversationList
                   activeConversationId={activeConversationId}
@@ -203,7 +203,7 @@ const Index = () => {
 
             <div className="flex items-center gap-2 md:hidden">
               <Brain className="w-5 h-5 text-primary" />
-              <span className="font-semibold text-foreground">Topha</span>
+              <span className="font-semibold text-foreground">Ping</span>
             </div>
           </div>
 

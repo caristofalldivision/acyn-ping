@@ -28,8 +28,8 @@ interface Params {
 
 function buildPlan(p: Params, deviceName: string) {
   const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  const backupName = `topha-pre-hotspot-${ts}`;
-  const exportName = `topha-pre-hotspot-${ts}.rsc`;
+  const backupName = `ping-pre-hotspot-${ts}`;
+  const exportName = `ping-pre-hotspot-${ts}.rsc`;
   const wg = p.payment_walled_garden.length
     ? p.payment_walled_garden
     : ["*.safaricom.co.ke", "*.safaricom.com", "*.mpesa.com", "*.gstatic.com"];
@@ -70,10 +70,10 @@ function buildPlan(p: Params, deviceName: string) {
         kind: "write",
         requires_confirm: true,
         commands: [
-          `/ip address add address=${p.gateway_ip}/${p.network.split("/")[1]} interface=${p.hotspot_interface} comment="topha-hotspot"`,
+          `/ip address add address=${p.gateway_ip}/${p.network.split("/")[1]} interface=${p.hotspot_interface} comment="ping-hotspot"`,
         ],
         rollback_commands: [
-          `/ip address remove [find comment="topha-hotspot"]`,
+          `/ip address remove [find comment="ping-hotspot"]`,
         ],
       },
       {
@@ -83,10 +83,10 @@ function buildPlan(p: Params, deviceName: string) {
         kind: "write",
         requires_confirm: true,
         commands: [
-          `/ip pool add name=topha-hs-pool ranges=${p.pool_range}`,
+          `/ip pool add name=ping-hs-pool ranges=${p.pool_range}`,
         ],
         rollback_commands: [
-          `/ip pool remove [find name=topha-hs-pool]`,
+          `/ip pool remove [find name=ping-hs-pool]`,
         ],
       },
       {
@@ -96,11 +96,11 @@ function buildPlan(p: Params, deviceName: string) {
         kind: "write",
         requires_confirm: true,
         commands: [
-          `/ip dhcp-server add name=topha-hs-dhcp interface=${p.hotspot_interface} address-pool=topha-hs-pool lease-time=1h disabled=no`,
+          `/ip dhcp-server add name=ping-hs-dhcp interface=${p.hotspot_interface} address-pool=ping-hs-pool lease-time=1h disabled=no`,
           `/ip dhcp-server network add address=${p.network} gateway=${p.gateway_ip} dns-server=${p.dns_servers}`,
         ],
         rollback_commands: [
-          `/ip dhcp-server remove [find name=topha-hs-dhcp]`,
+          `/ip dhcp-server remove [find name=ping-hs-dhcp]`,
           `/ip dhcp-server network remove [find address=${p.network}]`,
         ],
       },
@@ -124,10 +124,10 @@ function buildPlan(p: Params, deviceName: string) {
         kind: "write",
         requires_confirm: true,
         commands: [
-          `/ip hotspot add name=topha-hs interface=${p.hotspot_interface} profile=${p.hotspot_profile_name} address-pool=topha-hs-pool disabled=no idle-timeout=5m`,
+          `/ip hotspot add name=ping-hs interface=${p.hotspot_interface} profile=${p.hotspot_profile_name} address-pool=ping-hs-pool disabled=no idle-timeout=5m`,
         ],
         rollback_commands: [
-          `/ip hotspot remove [find name=topha-hs]`,
+          `/ip hotspot remove [find name=ping-hs]`,
         ],
       },
       {
@@ -150,10 +150,10 @@ function buildPlan(p: Params, deviceName: string) {
         kind: "write",
         requires_confirm: true,
         commands: wg.map(d =>
-          `/ip hotspot walled-garden add dst-host=${d} action=allow comment="topha-wg"`
+          `/ip hotspot walled-garden add dst-host=${d} action=allow comment="ping-wg"`
         ),
         rollback_commands: [
-          `/ip hotspot walled-garden remove [find comment="topha-wg"]`,
+          `/ip hotspot walled-garden remove [find comment="ping-wg"]`,
         ],
       },
       {
@@ -165,20 +165,20 @@ function buildPlan(p: Params, deviceName: string) {
         commands: [
           `/ip hotspot print`,
           `/ip hotspot profile print where name=${p.hotspot_profile_name}`,
-          `/ip hotspot walled-garden print count-only where comment="topha-wg"`,
+          `/ip hotspot walled-garden print count-only where comment="ping-wg"`,
         ],
         rollback_commands: [],
       },
     ],
     full_rollback_commands: [
-      `/ip hotspot walled-garden remove [find comment="topha-wg"]`,
-      `/ip hotspot remove [find name=topha-hs]`,
+      `/ip hotspot walled-garden remove [find comment="ping-wg"]`,
+      `/ip hotspot remove [find name=ping-hs]`,
       `/ip hotspot user profile remove [find name=${p.voucher_user_profile}]`,
       `/ip hotspot profile remove [find name=${p.hotspot_profile_name}]`,
       `/ip dhcp-server network remove [find address=${p.network}]`,
-      `/ip dhcp-server remove [find name=topha-hs-dhcp]`,
-      `/ip pool remove [find name=topha-hs-pool]`,
-      `/ip address remove [find comment="topha-hotspot"]`,
+      `/ip dhcp-server remove [find name=ping-hs-dhcp]`,
+      `/ip pool remove [find name=ping-hs-pool]`,
+      `/ip address remove [find comment="ping-hotspot"]`,
     ],
     restore_command: `/system backup load name=${backupName}`,
   };

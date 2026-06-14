@@ -71,7 +71,7 @@ export const PWAInstallPrompt = () => {
           </div>
           
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-foreground text-sm">Install Topha</h3>
+            <h3 className="font-semibold text-foreground text-sm">Install Ping</h3>
             <p className="text-xs text-muted-foreground mt-1">
               {isIOS 
                 ? "Tap the share button and select 'Add to Home Screen'"

@@ -1,4 +1,4 @@
-// Pairing flow for the Topha Agent.
+// Pairing flow for the Ping Agent.
 //   POST /device-pair        (auth required) -> { pairing_code, expires_at, agent_id }
 //   POST /device-pair/claim  (no auth)        body: { pairing_code, agent_name }
 //                                              -> { agent_id, agent_secret }
@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
     // Agent claims a pairing code (no user auth — agent isn't a user yet)
     const body = await req.json();
     const code = (body.pairing_code || "").toUpperCase().trim();
-    const agent_name = (body.agent_name || "Topha Agent").slice(0, 80);
+    const agent_name = (body.agent_name || "Ping Agent").slice(0, 80);
     if (!code) {
       return new Response(JSON.stringify({ error: "pairing_code required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
