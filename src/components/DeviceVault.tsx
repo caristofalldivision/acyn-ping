@@ -169,7 +169,7 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
   const [name, setName] = useState("");
   const [host, setHost] = useState("");
   const [vendor, setVendor] = useState("mikrotik");
-  const [method, setMethod] = useState("rest");
+  const [method, setMethod] = useState("ssh");
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
@@ -227,7 +227,7 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
       connection_method: method,
       username,
       credential_encrypted: password, // TODO: encrypt at rest via pgcrypto in a follow-up
-      port: method === "rest" ? 443 : method === "ssh" ? 22 : 8728,
+      port: method === "rest" ? 443 : 22,
       status: "pending",
     });
     setSaving(false);
@@ -259,13 +259,27 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
                 </p>
                 <div className="rounded-lg border border-border bg-card p-3 space-y-2 text-xs font-mono">
                   <p className="text-muted-foreground"># Linux / macOS</p>
-                  <code className="block break-all">curl -fsSL https://topha.acyn.world/agent/install.sh | sh</code>
+                  <code className="block break-all">curl -fsSL https://ping.echoisp.click/agent/install.sh | sh</code>
                   <p className="text-muted-foreground mt-3"># Windows (PowerShell)</p>
-                  <code className="block break-all">iwr -useb https://topha.acyn.world/agent/install.ps1 | iex</code>
+                  <code className="block break-all">iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex</code>
+                  <p className="text-[10px] text-muted-foreground mt-2">Mirror: https://ping.acyninnovation.com</p>
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-2">
-                  Supports REST API (RouterOS v7.1+), legacy API (v6+) and SSH.
+                  Supports SSH (RouterOS v6 + v7, the same way you use Winbox) and REST API (v7.1+).
                 </p>
+              </div>
+
+              <div className="rounded-lg border border-border bg-card p-3 text-xs space-y-2">
+                <p className="text-foreground font-medium">Prepare your MikroTik in Winbox (one time)</p>
+                <p className="text-muted-foreground">Open a New Terminal in Winbox and paste:</p>
+                <code className="block break-all whitespace-pre-wrap font-mono text-[11px]">{`/ip service enable ssh
+/ip service set ssh port=22
+# Optional, RouterOS v7.1+ only:
+/ip service enable www-ssl
+# Dedicated agent user (replace STRONGPASS):
+/user group add name=topha policy=read,write,policy,test,api,ssh,rest-api,sensitive
+/user add name=topha group=topha password=STRONGPASS`}</code>
+                <p className="text-muted-foreground">Use these same credentials in step 3.</p>
               </div>
               <Button onClick={generateCode} disabled={generating} className="w-full">
                 {generating ? "Generating…" : "I've installed it — generate pairing code"}
@@ -288,13 +302,19 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
                   <p className="text-muted-foreground"># Already installed:</p>
                   <code className="block break-all">topha-agent pair {pairingCode}</code>
                   <p className="text-muted-foreground mt-2"># Install + pair in one go (Linux / macOS):</p>
-                  <code className="block break-all">curl -fsSL https://topha.acyn.world/agent/install.sh | sh -s -- {pairingCode}</code>
+                  <code className="block break-all">curl -fsSL https://ping.echoisp.click/agent/install.sh | sh -s -- {pairingCode}</code>
                   <p className="text-muted-foreground mt-2"># Install + pair in one go (Windows PowerShell):</p>
-                  <code className="block break-all">{`$env:TOPHA_CODE="${pairingCode}"; iwr -useb https://topha.acyn.world/agent/install.ps1 | iex`}</code>
-                  <Button size="sm" variant="outline" className="mt-2 h-7 text-xs w-full" onClick={() => {
-                    navigator.clipboard.writeText(`curl -fsSL https://topha.acyn.world/agent/install.sh | sh -s -- ${pairingCode}`);
-                    toast({ title: "Copied Linux/macOS install command" });
-                  }}>Copy Linux/macOS command</Button>
+                  <code className="block break-all">{`$env:TOPHA_CODE="${pairingCode}"; iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex`}</code>
+                  <div className="flex gap-2 mt-2">
+                    <Button size="sm" variant="outline" className="h-7 text-xs flex-1" onClick={() => {
+                      navigator.clipboard.writeText(`curl -fsSL https://ping.echoisp.click/agent/install.sh | sh -s -- ${pairingCode}`);
+                      toast({ title: "Copied Linux/macOS command" });
+                    }}>Copy Linux/macOS</Button>
+                    <Button size="sm" variant="outline" className="h-7 text-xs flex-1" onClick={() => {
+                      navigator.clipboard.writeText(`$env:TOPHA_CODE="${pairingCode}"; iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex`);
+                      toast({ title: "Copied Windows command" });
+                    }}>Copy Windows</Button>
+                  </div>
                 </div>
 
                 <div className={`mt-3 rounded-lg border p-3 text-sm flex items-center gap-2 ${agentOnline ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground"}`}>
@@ -340,9 +360,8 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
                 </Field>
                 <Field label="Connection method">
                   <select value={method} onChange={e => setMethod(e.target.value)} className={inp}>
+                    <option value="ssh">SSH (RouterOS v6 + v7, like Winbox)</option>
                     <option value="rest">REST API (RouterOS v7.1+)</option>
-                    <option value="api">Legacy API (v6 + v7)</option>
-                    <option value="ssh">SSH</option>
                   </select>
                 </Field>
                 <div className="grid grid-cols-2 gap-2">

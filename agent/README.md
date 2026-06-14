@@ -8,17 +8,34 @@ CGNAT/NAT — Topha never needs your router's public IP.
 
 ```bash
 # Linux / macOS
-curl -fsSL https://topha.acyn.world/agent/install.sh | sh
+curl -fsSL https://ping.echoisp.click/agent/install.sh | sh
 
 # Pair in one go
-curl -fsSL https://topha.acyn.world/agent/install.sh | sh -s -- <PAIRING_CODE>
+curl -fsSL https://ping.echoisp.click/agent/install.sh | sh -s -- <PAIRING_CODE>
 
-# Windows (PowerShell)
-iwr -useb https://topha.acyn.world/agent/install.ps1 | iex
+# Windows (PowerShell) — install + pair
+$env:TOPHA_CODE="<PAIRING_CODE>"; iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex
 ```
 
-The installer downloads from GitHub Releases by default. Override with
+Mirror: `https://ping.acyninnovation.com`. The installer downloads the binary
+from GitHub Releases by default. Override with
 `TOPHA_RELEASE_BASE=https://your-host/path` if you self-host the binaries.
+
+## Prepare your MikroTik (in Winbox)
+
+Open Winbox → New Terminal and paste:
+
+```routeros
+/ip service enable ssh
+/ip service set ssh port=22
+# Optional REST API (RouterOS v7.1+):
+/ip service enable www-ssl
+# Dedicated agent user:
+/user group add name=topha policy=read,write,policy,test,api,ssh,rest-api,sensitive
+/user add name=topha group=topha password=STRONGPASS
+```
+
+Use the `topha` user and password when adding the router in Topha.
 
 ## Cut a release (maintainer, one command)
 
