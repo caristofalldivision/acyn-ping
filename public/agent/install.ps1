@@ -1,9 +1,9 @@
 # Ping Agent installer (Windows / PowerShell)
 # Usage (install only):
-#   iwr -useb https://ping.acyn.world/agent/install.ps1 | iex
+#   iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex
 #
 # Usage (install + pair in one go):
-#   $env:PING_CODE="ABC123"; iwr -useb https://ping.acyn.world/agent/install.ps1 | iex
+#   $env:PING_CODE="ABC123"; iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex
 $ErrorActionPreference = "Stop"
 
 $ReleaseBase = if ($env:PING_RELEASE_BASE) { $env:PING_RELEASE_BASE } else { "https://github.com/caristofalldivision/ping/releases/latest/download" }

@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 # Ping Agent installer (Linux / macOS)
 # Usage:
-#   curl -fsSL https://ping.acyn.world/agent/install.sh | sh
-#   curl -fsSL https://ping.acyn.world/agent/install.sh | sh -s -- <PAIRING_CODE>
+#   curl -fsSL https://ping.echoisp.click/agent/install.sh | sh
+#   curl -fsSL https://ping.echoisp.click/agent/install.sh | sh -s -- <PAIRING_CODE>
 set -e
 
 RELEASE_BASE="${PING_RELEASE_BASE:-https://github.com/caristofalldivision/ping/releases/latest/download}"
