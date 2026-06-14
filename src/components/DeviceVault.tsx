@@ -100,8 +100,8 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
             </div>
             <h2 className="text-lg font-semibold">No routers connected yet</h2>
             <p className="text-sm text-muted-foreground">
-              Install the Topha Agent on a machine on your LAN, pair it with a one-time code, and then
-              Topha can fetch configs and run setup wizards on your MikroTik routers — even behind CGNAT.
+              Install the Ping Agent on a machine on your LAN, pair it with a one-time code, and then
+              Ping can fetch configs and run setup wizards on your MikroTik routers — even behind CGNAT.
             </p>
             <Button onClick={() => setShowAdd(true)} className="gap-1.5">
               <Plus className="w-4 h-4" /> Add your first router
@@ -150,7 +150,7 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
               </div>
             ))}
             <p className="text-[11px] text-muted-foreground text-center pt-4">
-              Actions are queued and picked up by your Topha Agent on its next poll (within ~5 seconds).
+              Actions are queued and picked up by your Ping Agent on its next poll (within ~5 seconds).
             </p>
           </div>
         )}
@@ -252,10 +252,10 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
           {step === 1 && (
             <>
               <div>
-                <h2 className="text-base font-semibold mb-2">1. Install the Topha Agent</h2>
+                <h2 className="text-base font-semibold mb-2">1. Install the Ping Agent</h2>
                 <p className="text-sm text-muted-foreground mb-3">
                   The agent is a small program (~5 MB) that runs on a machine on the same LAN as your router.
-                  It dials out to Topha so we never need your router's public IP — works behind CGNAT.
+                  It dials out to Ping so we never need your router's public IP — works behind CGNAT.
                 </p>
                 <div className="rounded-lg border border-border bg-card p-3 space-y-2 text-xs font-mono">
                   <p className="text-muted-foreground"># Linux / macOS</p>
@@ -277,8 +277,8 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
 # Optional, RouterOS v7.1+ only:
 /ip service enable www-ssl
 # Dedicated agent user (replace STRONGPASS):
-/user group add name=topha policy=read,write,policy,test,api,ssh,rest-api,sensitive
-/user add name=topha group=topha password=STRONGPASS`}</code>
+/user group add name=ping policy=read,write,policy,test,api,ssh,rest-api,sensitive
+/user add name=ping group=ping password=STRONGPASS`}</code>
                 <p className="text-muted-foreground">Use these same credentials in step 3.</p>
               </div>
               <Button onClick={generateCode} disabled={generating} className="w-full">
@@ -300,18 +300,18 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
                 </div>
                 <div className="rounded-lg border border-border bg-card p-3 mt-3 font-mono text-xs space-y-2">
                   <p className="text-muted-foreground"># Already installed:</p>
-                  <code className="block break-all">topha-agent pair {pairingCode}</code>
+                  <code className="block break-all">ping-agent pair {pairingCode}</code>
                   <p className="text-muted-foreground mt-2"># Install + pair in one go (Linux / macOS):</p>
                   <code className="block break-all">curl -fsSL https://ping.echoisp.click/agent/install.sh | sh -s -- {pairingCode}</code>
                   <p className="text-muted-foreground mt-2"># Install + pair in one go (Windows PowerShell):</p>
-                  <code className="block break-all">{`$env:TOPHA_CODE="${pairingCode}"; iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex`}</code>
+                  <code className="block break-all">{`$env:PING_CODE="${pairingCode}"; iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex`}</code>
                   <div className="flex gap-2 mt-2">
                     <Button size="sm" variant="outline" className="h-7 text-xs flex-1" onClick={() => {
                       navigator.clipboard.writeText(`curl -fsSL https://ping.echoisp.click/agent/install.sh | sh -s -- ${pairingCode}`);
                       toast({ title: "Copied Linux/macOS command" });
                     }}>Copy Linux/macOS</Button>
                     <Button size="sm" variant="outline" className="h-7 text-xs flex-1" onClick={() => {
-                      navigator.clipboard.writeText(`$env:TOPHA_CODE="${pairingCode}"; iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex`);
+                      navigator.clipboard.writeText(`$env:PING_CODE="${pairingCode}"; iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex`);
                       toast({ title: "Copied Windows command" });
                     }}>Copy Windows</Button>
                   </div>
@@ -329,7 +329,7 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
                   <div className="mt-2 rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground space-y-2">
                     <p><strong className="text-foreground">Run as a service (Linux):</strong> see <code>agent/README.md</code> for the ready-made systemd unit.</p>
                     <p><strong className="text-foreground">Upgrade:</strong> re-run the install command — it overwrites the binary in place.</p>
-                    <p><strong className="text-foreground">Uninstall:</strong> <code>sudo rm /usr/local/bin/topha-agent && rm -rf ~/.topha</code></p>
+                    <p><strong className="text-foreground">Uninstall:</strong> <code>sudo rm /usr/local/bin/ping-agent && rm -rf ~/.ping</code></p>
                     <p><strong className="text-foreground">Binaries:</strong> served from your GitHub Releases. Maintainers cut a release with <code>cd agent && ./release.sh 0.2.0</code>.</p>
                   </div>
                 )}

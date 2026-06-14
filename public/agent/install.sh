@@ -1,13 +1,13 @@
 #!/usr/bin/env sh
-# Topha Agent installer (Linux / macOS)
+# Ping Agent installer (Linux / macOS)
 # Usage:
-#   curl -fsSL https://topha.acyn.world/agent/install.sh | sh
-#   curl -fsSL https://topha.acyn.world/agent/install.sh | sh -s -- <PAIRING_CODE>
+#   curl -fsSL https://ping.acyn.world/agent/install.sh | sh
+#   curl -fsSL https://ping.acyn.world/agent/install.sh | sh -s -- <PAIRING_CODE>
 set -e
 
-RELEASE_BASE="${TOPHA_RELEASE_BASE:-https://github.com/caristofalldivision/topha/releases/latest/download}"
-INSTALL_DIR="${TOPHA_INSTALL_DIR:-/usr/local/bin}"
-BIN="topha-agent"
+RELEASE_BASE="${PING_RELEASE_BASE:-https://github.com/caristofalldivision/ping/releases/latest/download}"
+INSTALL_DIR="${PING_INSTALL_DIR:-/usr/local/bin}"
+BIN="ping-agent"
 
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"
@@ -25,7 +25,7 @@ URL="${RELEASE_BASE}/${BIN}-${OS}-${ARCH}"
 echo "→ Downloading $URL"
 TMP="$(mktemp)"
 if ! curl -fsSL "$URL" -o "$TMP"; then
-  echo "Download failed. Set TOPHA_RELEASE_BASE to override the source URL." >&2
+  echo "Download failed. Set PING_RELEASE_BASE to override the source URL." >&2
   exit 1
 fi
 chmod +x "$TMP"
@@ -46,6 +46,6 @@ if [ -n "$1" ]; then
 else
   echo ""
   echo "Next:"
-  echo "  $BIN pair <PAIRING_CODE>   # get this from Topha → Device Vault"
+  echo "  $BIN pair <PAIRING_CODE>   # get this from Ping → Device Vault"
   echo "  $BIN run"
 fi

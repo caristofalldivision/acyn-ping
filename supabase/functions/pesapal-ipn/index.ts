@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     if (sub.device_id) {
       const profile = plan.bandwidth_profile || 'default'
       const script = [
-        `/ip hotspot user add name=${creds.u} password=${creds.p} profile=${profile} limit-uptime=${plan.duration_minutes}m comment="topha:${sub.id}"`,
+        `/ip hotspot user add name=${creds.u} password=${creds.p} profile=${profile} limit-uptime=${plan.duration_minutes}m comment="ping:${sub.id}"`,
       ].join('\n')
       await admin.from('device_jobs').insert({
         user_id: sub.user_id, device_id: sub.device_id, kind: 'apply_script', script_content: script, status: 'pending',
@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
 
     // Fire-and-forget SMS receipt
     if (settings.sms_on_payment && settings.talksasa_api_key) {
-      const msg = `${settings.business_name || 'Topha'}: Payment received. Wi-Fi user: ${creds.u} pass: ${creds.p} valid ${plan.duration_minutes} min.`
+      const msg = `${settings.business_name || 'Ping'}: Payment received. Wi-Fi user: ${creds.u} pass: ${creds.p} valid ${plan.duration_minutes} min.`
       fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-sms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-internal-user': sub.user_id, 'x-internal-secret': Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')! },

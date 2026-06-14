@@ -1,15 +1,15 @@
-// Topha Agent v0.1
+// Ping Agent v0.1
 //
 // Single-file Go program that:
-//   1. Pairs once with `topha-agent pair <code>`  -> stores agent_id + secret in ~/.topha/agent.json
-//   2. Polls Topha for pending jobs and runs them against MikroTik routers
+//   1. Pairs once with `ping-agent pair <code>`  -> stores agent_id + secret in ~/.ping/agent.json
+//   2. Polls Ping for pending jobs and runs them against MikroTik routers
 //
 // Drivers: SSH (default, works on RouterOS v6 + v7) and REST (RouterOS v7.1+).
 // Job kinds handled: fetch_config, apply_script, take_backup, restore_backup, wizard_hotspot.
 //
-// Build:   go build -o topha-agent .
-// Run:     ./topha-agent pair ABC123
-//          ./topha-agent run
+// Build:   go build -o ping-agent .
+// Run:     ./ping-agent pair ABC123
+//          ./ping-agent run
 //
 // No external deps beyond the Go stdlib + golang.org/x/crypto/ssh.
 
@@ -95,13 +95,13 @@ type portalPayload struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("usage: topha-agent <pair <code> | run | status | doctor>")
+		fmt.Println("usage: ping-agent <pair <code> | run | status | doctor>")
 		os.Exit(1)
 	}
 	switch os.Args[1] {
 	case "pair":
 		if len(os.Args) < 3 {
-			die("usage: topha-agent pair <code>")
+			die("usage: ping-agent pair <code>")
 		}
 		if err := doPair(os.Args[2]); err != nil {
 			die(err.Error())
@@ -123,11 +123,11 @@ func main() {
 }
 
 func runDoctor() {
-	fmt.Println("== topha-agent doctor ==")
+	fmt.Println("== ping-agent doctor ==")
 	c, err := loadConfig()
 	if err != nil {
 		fmt.Println("[FAIL] pairing config:", err)
-		fmt.Println("       fix: run 'topha-agent pair <CODE>' (get code from Topha → Device Vault)")
+		fmt.Println("       fix: run 'ping-agent pair <CODE>' (get code from Ping → Device Vault)")
 		return
 	}
 	fmt.Printf("[ OK ] pairing config loaded · agent_id=%s\n", c.AgentID)
@@ -157,7 +157,7 @@ func runDoctor() {
 // ---------------- pairing ----------------
 
 func doPair(code string) error {
-	base := envOr("TOPHA_BASE_URL", defaultBase)
+	base := envOr("PING_BASE_URL", defaultBase)
 	body, _ := json.Marshal(map[string]string{"pairing_code": code, "agent_name": hostname()})
 	req, _ := http.NewRequest("POST", base+"/device-pair/claim", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -188,9 +188,9 @@ func doPair(code string) error {
 func runLoop() {
 	c, err := loadConfig()
 	if err != nil {
-		die("not paired yet — run: topha-agent pair <code>")
+		die("not paired yet — run: ping-agent pair <code>")
 	}
-	fmt.Printf("topha-agent online · agent_id=%s · polling %s\n", c.AgentID, c.BaseURL)
+	fmt.Printf("ping-agent online · agent_id=%s · polling %s\n", c.AgentID, c.BaseURL)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	sigCh := make(chan os.Signal, 1)
@@ -204,7 +204,7 @@ func runLoop() {
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("topha-agent stopped")
+			fmt.Println("ping-agent stopped")
 			return
 		default:
 		}
@@ -291,7 +291,7 @@ func handleJob(c config, j job) {
 		}
 		sendResult(c, j.ID, status, out, errStr)
 	case "take_backup":
-		name := "topha-" + time.Now().Format("20060102-150405")
+		name := "ping-" + time.Now().Format("20060102-150405")
 		if j.ScriptContent != nil && *j.ScriptContent != "" {
 			name = strings.TrimSpace(*j.ScriptContent)
 		}
@@ -726,7 +726,7 @@ func reportDeviceStatus(c config, deviceID string, online bool, version, model s
 	}
 }
 
-// ---------------- topha API helpers ----------------
+// ---------------- ping API helpers ----------------
 
 func sendLog(c config, jobID, line string) {
 	body, _ := json.Marshal(map[string]string{"job_id": jobID, "line": line})
@@ -771,7 +771,7 @@ func configPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(u.HomeDir, ".topha")
+	dir := filepath.Join(u.HomeDir, ".ping")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
@@ -785,7 +785,7 @@ func loadConfig() (config, error) {
 	}
 	raw, err := os.ReadFile(p)
 	if err != nil {
-		return config{}, errors.New("not paired — run: topha-agent pair <code>")
+		return config{}, errors.New("not paired — run: ping-agent pair <code>")
 	}
 	var c config
 	if err := json.Unmarshal(raw, &c); err != nil {
@@ -821,7 +821,7 @@ func die(msg string) {
 func hostname() string {
 	h, err := os.Hostname()
 	if err != nil || h == "" {
-		return "topha-agent"
+		return "ping-agent"
 	}
 	return h
 }

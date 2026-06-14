@@ -54,7 +54,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
-          name: Topha Agent ${{ steps.ver.outputs.version }}
+          name: Ping Agent ${{ steps.ver.outputs.version }}
           generate_release_notes: true
           files: |
             agent/dist/*

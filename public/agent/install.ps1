@@ -1,21 +1,21 @@
-# Topha Agent installer (Windows / PowerShell)
+# Ping Agent installer (Windows / PowerShell)
 # Usage (install only):
-#   iwr -useb https://topha.acyn.world/agent/install.ps1 | iex
+#   iwr -useb https://ping.acyn.world/agent/install.ps1 | iex
 #
 # Usage (install + pair in one go):
-#   $env:TOPHA_CODE="ABC123"; iwr -useb https://topha.acyn.world/agent/install.ps1 | iex
+#   $env:PING_CODE="ABC123"; iwr -useb https://ping.acyn.world/agent/install.ps1 | iex
 $ErrorActionPreference = "Stop"
 
-$ReleaseBase = if ($env:TOPHA_RELEASE_BASE) { $env:TOPHA_RELEASE_BASE } else { "https://github.com/caristofalldivision/topha/releases/latest/download" }
-$InstallDir  = if ($env:TOPHA_INSTALL_DIR)  { $env:TOPHA_INSTALL_DIR }  else { "$env:LOCALAPPDATA\Topha" }
-$Bin = "topha-agent.exe"
-$PairCode = if ($env:TOPHA_CODE) { $env:TOPHA_CODE } elseif ($code) { $code } else { $null }
+$ReleaseBase = if ($env:PING_RELEASE_BASE) { $env:PING_RELEASE_BASE } else { "https://github.com/caristofalldivision/ping/releases/latest/download" }
+$InstallDir  = if ($env:PING_INSTALL_DIR)  { $env:PING_INSTALL_DIR }  else { "$env:LOCALAPPDATA\Ping" }
+$Bin = "ping-agent.exe"
+$PairCode = if ($env:PING_CODE) { $env:PING_CODE } elseif ($code) { $code } else { $null }
 
 # Force TLS 1.2 (required on older Windows / PS5)
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
 
 $arch = if ([Environment]::Is64BitOperatingSystem) { "amd64" } else { "386" }
-$url  = "$ReleaseBase/topha-agent-windows-$arch.exe"
+$url  = "$ReleaseBase/ping-agent-windows-$arch.exe"
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 $dest = Join-Path $InstallDir $Bin
@@ -29,10 +29,10 @@ try {
   Write-Host ""
   Write-Host "This usually means the agent binary has not been published yet to GitHub Releases."
   Write-Host "Fix: the project owner needs to run the 'Agent Release' workflow once:"
-  Write-Host "  https://github.com/caristofalldivision/topha/actions/workflows/agent-release.yml"
+  Write-Host "  https://github.com/caristofalldivision/ping/actions/workflows/agent-release.yml"
   Write-Host "Then click 'Run workflow', enter version (e.g. 0.2.0), and wait ~3 minutes."
   Write-Host ""
-  Write-Host "Or override the source URL: `$env:TOPHA_RELEASE_BASE='https://your-host/path'"
+  Write-Host "Or override the source URL: `$env:PING_RELEASE_BASE='https://your-host/path'"
   exit 1
 }
 
@@ -55,10 +55,10 @@ if ($PairCode) {
   Write-Host "Pairing with code $PairCode"
   & $dest pair $PairCode
   Write-Host ""
-  Write-Host "Next: run 'topha-agent run' to start polling for jobs."
+  Write-Host "Next: run 'ping-agent run' to start polling for jobs."
 } else {
   Write-Host ""
   Write-Host "Next:"
-  Write-Host "  topha-agent pair <PAIRING_CODE>"
-  Write-Host "  topha-agent run"
+  Write-Host "  ping-agent pair <PAIRING_CODE>"
+  Write-Host "  ping-agent run"
 }

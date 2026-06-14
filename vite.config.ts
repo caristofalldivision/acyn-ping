@@ -17,8 +17,8 @@ export default defineConfig(({ mode }) => ({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "apple-touch-icon.png", "pwa-192x192.png"],
       manifest: {
-        name: "Topha - AI Assistant",
-        short_name: "Topha",
+        name: "Ping - AI Assistant",
+        short_name: "Ping",
         description: "Your personal AI assistant for productivity",
         theme_color: "#0a0c10",
         background_color: "#0a0c10",

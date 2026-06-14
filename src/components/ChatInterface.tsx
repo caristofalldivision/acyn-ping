@@ -393,7 +393,7 @@ export const ChatInterface = ({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Message Topha..."
+              placeholder="Message Ping..."
               disabled={loading}
               rows={1}
               className="flex-1 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 resize-none min-h-[36px] max-h-[200px] py-2 px-1 text-sm placeholder:text-muted-foreground"
@@ -408,7 +408,7 @@ export const ChatInterface = ({
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground/50 text-center mt-2">
-            Topha can make mistakes. Consider checking important info.
+            Ping can make mistakes. Consider checking important info.
           </p>
         </div>
       </div>

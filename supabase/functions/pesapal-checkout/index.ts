@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
       settings.pesapal_consumer_secret,
     )
 
-    const merchantRef = 'TOPHA-' + crypto.randomUUID().slice(0, 8)
+    const merchantRef = 'PING-' + crypto.randomUUID().slice(0, 8)
     const sub = await admin.from('subscriptions').insert({
       user_id: userId,
       device_id: device_id || null,
@@ -72,12 +72,12 @@ Deno.serve(async (req) => {
         id: merchantRef,
         currency: 'KES',
         amount: plan.price_kes,
-        description: `${settings.business_name || 'Topha'} - ${plan.name}`,
+        description: `${settings.business_name || 'Ping'} - ${plan.name}`,
         callback_url: callback_url || settings.pesapal_callback_url || `${Deno.env.get('SUPABASE_URL')}/functions/v1/pesapal-ipn?return=1`,
         notification_id: settings.pesapal_ipn_id,
         billing_address: {
           phone_number: customer_phone,
-          email_address: customer_email || `${customer_phone}@topha.local`,
+          email_address: customer_email || `${customer_phone}@ping.local`,
         },
       }),
     })

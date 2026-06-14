@@ -35,7 +35,7 @@ echo "→ Repo:         $SLUG"
 echo "→ Release base: $NEW_BASE"
 
 # Patch install.sh
-sed -i.bak -E "s#^RELEASE_BASE=\"\\\$\\{TOPHA_RELEASE_BASE:-[^}]*\\}\"#RELEASE_BASE=\"\${TOPHA_RELEASE_BASE:-${NEW_BASE}}\"#" public/agent/install.sh
+sed -i.bak -E "s#^RELEASE_BASE=\"\\\$\\{PING_RELEASE_BASE:-[^}]*\\}\"#RELEASE_BASE=\"\${PING_RELEASE_BASE:-${NEW_BASE}}\"#" public/agent/install.sh
 # Patch install.ps1
 sed -i.bak -E "s#https://github.com/[^\"']+/releases/latest/download#${NEW_BASE}#g" public/agent/install.ps1
 rm -f public/agent/install.sh.bak public/agent/install.ps1.bak
@@ -47,7 +47,7 @@ if ! git diff --quiet public/agent/install.sh public/agent/install.ps1; then
 fi
 
 TAG="agent-v${VERSION}"
-git tag -a "$TAG" -m "Topha Agent ${VERSION}"
+git tag -a "$TAG" -m "Ping Agent ${VERSION}"
 git push origin "$TAG"
 echo ""
 echo "✓ Pushed $TAG. Watch the build at:"

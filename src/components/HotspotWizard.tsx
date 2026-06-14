@@ -85,7 +85,7 @@ export const HotspotWizard = ({ device, onBack }: Props) => {
   const runPlan = async () => {
     if (!plan) return;
     const script = [
-      `# Topha hotspot setup for ${device.name}`,
+      `# Ping hotspot setup for ${device.name}`,
       `# Backup: ${plan.backup_name}`,
       ``,
       ...plan.steps.flatMap(s => [`# === ${s.title} ===`, ...s.commands, ``]),
@@ -183,7 +183,7 @@ export const HotspotWizard = ({ device, onBack }: Props) => {
           {phase === "params" && (
             <>
               <div className="rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground">
-                Topha will build a step-by-step plan, take a safety backup first, and ask you to confirm
+                Ping will build a step-by-step plan, take a safety backup first, and ask you to confirm
                 before any write. Every write step has an inverse rollback.
               </div>
               <Field label="Hotspot interface (must already exist)">

@@ -48,7 +48,7 @@ export const Auth = () => {
             <Brain className="w-6 h-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Topha</h1>
+            <h1 className="text-2xl font-semibold text-foreground">Ping</h1>
             <p className="text-sm text-muted-foreground mt-1">Your Personal AI Assistant</p>
           </div>
         </div>

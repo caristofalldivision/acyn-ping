@@ -818,7 +818,7 @@ export const ScriptGenerator = ({ onSendToChat, onBack, onOpenSaved, onOpenPorta
               <span className="text-xs font-medium text-primary">How it works</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Fill in your device details below. Topha will generate complete, copy-paste ready scripts
+              Fill in your device details below. Ping will generate complete, copy-paste ready scripts
               and guide you step by step - one step at a time.
             </p>
           </div>

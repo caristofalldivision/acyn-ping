@@ -112,7 +112,7 @@ export const MessageHistory = () => {
                   )}
                   <p className="text-sm">No messages sent yet</p>
                   <p className="text-xs mt-1">
-                    Ask Topha to send an email or SMS
+                    Ask Ping to send an email or SMS
                   </p>
                 </CardContent>
               </Card>
