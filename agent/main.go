@@ -95,7 +95,7 @@ type portalPayload struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("usage: ping-agent <pair <code> | run | status | doctor>")
+		fmt.Println("usage: ping-agent <pair <code> | run | status | doctor [--router HOST --user U --password P [--port 22]]>")
 		os.Exit(1)
 	}
 	switch os.Args[1] {
@@ -116,10 +116,83 @@ func main() {
 		}
 		fmt.Printf("agent_id=%s base=%s\n", c.AgentID, c.BaseURL)
 	case "doctor":
+		// Optional MikroTik reachability test: ping-agent doctor --router H --user U --password P [--port 22]
+		if len(os.Args) > 2 {
+			runRouterDoctor(os.Args[2:])
+			return
+		}
 		runDoctor()
 	default:
 		die("unknown command: " + os.Args[1])
 	}
+}
+
+// runRouterDoctor SSHs into a MikroTik with the supplied credentials and
+// runs `/system resource print` so the operator can confirm reachability
+// *before* trying to add the device to Ping.
+func runRouterDoctor(args []string) {
+	host, user, pass := "", "", ""
+	port := 22
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		next := ""
+		if i+1 < len(args) {
+			next = args[i+1]
+		}
+		switch a {
+		case "--router", "-h":
+			host = next
+			i++
+		case "--user", "-u":
+			user = next
+			i++
+		case "--password", "-p":
+			pass = next
+			i++
+		case "--port":
+			fmt.Sscanf(next, "%d", &port)
+			i++
+		}
+	}
+	if host == "" || user == "" || pass == "" {
+		die("usage: ping-agent doctor --router <host> --user <user> --password <pw> [--port 22]")
+	}
+	fmt.Printf("== ping-agent router doctor ==\n")
+	fmt.Printf("[ .. ] dialing ssh %s@%s:%d\n", user, host, port)
+	d := device{Host: host, Port: port, Username: user, Password: pass, ConnectionMethod: "ssh"}
+	exec, err := newSSH(d)
+	if err != nil {
+		fmt.Println("[FAIL] connect:", friendlySSHError(err, host, port))
+		os.Exit(1)
+	}
+	defer exec.close()
+	fmt.Println("[ OK ] SSH connected")
+	out, err := exec.run("/system resource print")
+	if err != nil {
+		fmt.Println("[FAIL] running /system resource print:", err)
+		os.Exit(1)
+	}
+	model := extractField(out, "board-name")
+	ver := extractField(out, "version")
+	fmt.Printf("[ OK ] RouterOS %s · %s\n", ver, model)
+	fmt.Println("router is reachable and credentials work — safe to add it in Ping → Device Vault.")
+}
+
+// friendlySSHError converts golang.org/x/crypto/ssh errors into actionable hints.
+func friendlySSHError(err error, host string, port int) string {
+	s := err.Error()
+	low := strings.ToLower(s)
+	switch {
+	case strings.Contains(low, "unable to authenticate"), strings.Contains(low, "no supported methods"):
+		return s + "  (wrong username or password — check the MikroTik user)"
+	case strings.Contains(low, "connection refused"):
+		return fmt.Sprintf("%s  (SSH disabled or wrong port — in Winbox run: /ip service enable ssh; /ip service set ssh port=%d)", s, port)
+	case strings.Contains(low, "i/o timeout"), strings.Contains(low, "deadline exceeded"):
+		return s + fmt.Sprintf("  (no route to %s:%d — firewall, VPN, or wrong IP)", host, port)
+	case strings.Contains(low, "no such host"):
+		return s + "  (DNS lookup failed — use the router's IP address)"
+	}
+	return s
 }
 
 func runDoctor() {
@@ -514,7 +587,7 @@ func newSSH(d device) (*sshExec, error) {
 	}
 	c, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", d.Host, port), cfg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s", friendlySSHError(err, d.Host, port))
 	}
 	return &sshExec{c: c}, nil
 }

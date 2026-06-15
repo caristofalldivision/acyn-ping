@@ -327,6 +327,8 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
                 </button>
                 {showHelp && (
                   <div className="mt-2 rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground space-y-2">
+                    <p><strong className="text-foreground">Verify backend:</strong> <code>ping-agent doctor</code></p>
+                    <p><strong className="text-foreground">Verify MikroTik SSH:</strong> <code>ping-agent doctor --router 192.168.88.1 --user ping --password STRONGPASS</code></p>
                     <p><strong className="text-foreground">Run as a service (Linux):</strong> see <code>agent/README.md</code> for the ready-made systemd unit.</p>
                     <p><strong className="text-foreground">Upgrade:</strong> re-run the install command — it overwrites the binary in place.</p>
                     <p><strong className="text-foreground">Uninstall:</strong> <code>sudo rm /usr/local/bin/ping-agent && rm -rf ~/.ping</code></p>

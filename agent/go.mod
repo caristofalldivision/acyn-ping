@@ -1,4 +1,4 @@
-module github.com/topha/agent
+module github.com/caristofalldivision/ping/agent
 
 go 1.22
 

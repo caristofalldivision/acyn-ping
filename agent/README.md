@@ -37,6 +37,18 @@ Open Winbox → New Terminal and paste:
 
 Use the `ping` user and password when adding the router in Ping.
 
+### Verify the router is reachable
+
+Before adding the router in Ping, sanity-check SSH credentials from the
+machine running the agent:
+
+```bash
+ping-agent doctor --router 192.168.88.1 --user ping --password STRONGPASS
+```
+
+You should see `[ OK ] RouterOS …`. If not, the error message tells you
+exactly what to fix (SSH disabled, wrong port, wrong password, firewall).
+
 ## Cut a release (maintainer, one command)
 
 ```bash
