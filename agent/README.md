@@ -13,12 +13,13 @@ curl -fsSL https://ping.echoisp.click/agent/install.sh | sh
 # Pair in one go
 curl -fsSL https://ping.echoisp.click/agent/install.sh | sh -s -- <PAIRING_CODE>
 
-# Windows (PowerShell) — install + pair
-$env:PING_CODE="<PAIRING_CODE>"; iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex
+# Windows (PowerShell) — install + pair, keeps errors visible
+powershell -NoExit -ExecutionPolicy Bypass -Command "$env:PING_CODE='<PAIRING_CODE>'; iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex"
 ```
 
 Mirror: `https://ping.acyninnovation.com`. The installer downloads the binary
-from GitHub Releases by default. Override with
+from your Ping domain first, then falls back to GitHub Releases. It writes a
+Windows log to `%TEMP%\Ping\ping-agent-install.log`. Override with
 `PING_RELEASE_BASE=https://your-host/path` if you self-host the binaries.
 
 ## Prepare your MikroTik (in Winbox)
