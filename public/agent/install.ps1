@@ -7,12 +7,44 @@
 #   $env:PING_CODE="ABC123"; iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex
 #
 # Optional env vars:
-#   PING_RELEASE_BASE  override download base (default: GitHub latest release)
+#   PING_RELEASE_BASE  override download base (default: Ping-hosted binaries, then GitHub fallback)
 #   PING_REPO          owner/repo on GitHub        (default: caristofalldivision/ping)
 #   PING_INSTALL_DIR   install location            (default: %LOCALAPPDATA%\Ping)
 #   PING_CODE          pairing code (runs `ping-agent pair` after install)
+#   PING_START         set to 0 to skip starting the agent after install+pair
+#   PING_NO_PAUSE      set to 1 to skip the error pause
 
 $ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
+
+$LogDir = Join-Path $env:TEMP "Ping"
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+$LogFile = Join-Path $LogDir "ping-agent-install.log"
+try { Start-Transcript -Path $LogFile -Append | Out-Null } catch {}
+
+function Pause-OnError {
+  if (-not $env:PING_NO_PAUSE) {
+    Write-Host ""
+    try { Read-Host "Press Enter to close this window" | Out-Null } catch {}
+  }
+}
+
+function Fail-Install {
+  param([string]$Message)
+  Write-Host ""
+  Write-Host $Message -ForegroundColor Red
+  Write-Host "Installer log: $LogFile" -ForegroundColor Yellow
+  Pause-OnError
+  exit 1
+}
+
+trap {
+  Write-Host ""
+  Write-Host "Ping Agent installer crashed: $($_.Exception.Message)" -ForegroundColor Red
+  Write-Host "Installer log: $LogFile" -ForegroundColor Yellow
+  Pause-OnError
+  exit 1
+}
 
 # --- Force modern TLS so GitHub downloads work on stock Windows / PS5 ---
 try {
@@ -20,79 +52,68 @@ try {
     [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 } catch {}
 
-$Repo        = if ($env:PING_REPO)         { $env:PING_REPO }         else { "caristofalldivision/ping" }
-$ReleaseBase = if ($env:PING_RELEASE_BASE) { $env:PING_RELEASE_BASE } else { "https://github.com/$Repo/releases/latest/download" }
-$InstallDir  = if ($env:PING_INSTALL_DIR)  { $env:PING_INSTALL_DIR }  else { "$env:LOCALAPPDATA\Ping" }
-$Bin         = "ping-agent.exe"
-$PairCode    = if ($env:PING_CODE)         { $env:PING_CODE }         else { $null }
+$Repo       = if ($env:PING_REPO)        { $env:PING_REPO }        else { "caristofalldivision/ping" }
+$InstallDir = if ($env:PING_INSTALL_DIR) { $env:PING_INSTALL_DIR } else { "$env:LOCALAPPDATA\Ping" }
+$Bin        = "ping-agent.exe"
+$PairCode   = if ($env:PING_CODE)        { $env:PING_CODE }        else { $null }
 
-$arch    = if ([Environment]::Is64BitOperatingSystem) { "amd64" } else { "386" }
-$asset   = "ping-agent-windows-$arch.exe"
-$url     = "$ReleaseBase/$asset"
+if (-not [Environment]::Is64BitOperatingSystem) {
+  Fail-Install "Ping Agent currently supports 64-bit Windows only."
+}
+
+$asset = "ping-agent-windows-amd64.exe"
+$DownloadBases = @()
+if ($env:PING_RELEASE_BASE) {
+  $DownloadBases += $env:PING_RELEASE_BASE.TrimEnd("/")
+} else {
+  $DownloadBases += "https://ping.echoisp.click/agent/bin"
+  $DownloadBases += "https://ping.acyninnovation.com/agent/bin"
+  $DownloadBases += "https://github.com/$Repo/releases/latest/download"
+}
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 $dest = Join-Path $InstallDir $Bin
 
-# --- Preflight: ask the GitHub API whether the asset actually exists ---
-# This turns a confusing "connection closed" into a clear, fixable error.
-function Test-ReleaseAsset {
-  param([string]$Repo, [string]$AssetName)
+$tmp = "$dest.download"
+Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+$errors = New-Object System.Collections.Generic.List[string]
+$downloaded = $false
+
+foreach ($base in $DownloadBases) {
+  $url = "$base/$asset"
+  Write-Host "Downloading $url"
   try {
-    $api  = "https://api.github.com/repos/$Repo/releases/latest"
-    $info = Invoke-RestMethod -Uri $api -UseBasicParsing -Headers @{ "User-Agent" = "ping-installer" }
-    if (-not $info -or -not $info.assets) { return $null }
-    $hit = $info.assets | Where-Object { $_.name -eq $AssetName } | Select-Object -First 1
-    return @{ Tag = $info.tag_name; Found = [bool]$hit; Names = ($info.assets | ForEach-Object { $_.name }) }
+    Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing -MaximumRedirection 10 -Headers @{ "User-Agent" = "ping-installer" }
+    $size = (Get-Item $tmp).Length
+    $magic = [System.IO.File]::ReadAllBytes($tmp)[0..1]
+    if ($size -lt 200000 -or $magic[0] -ne 0x4d -or $magic[1] -ne 0x5a) {
+      throw "download was not a valid Windows executable ($size bytes)"
+    }
+    Move-Item $tmp $dest -Force
+    $downloaded = $true
+    break
   } catch {
-    return $null
+    $errors.Add("$url -> $($_.Exception.Message)") | Out-Null
+    Remove-Item $tmp -Force -ErrorAction SilentlyContinue
   }
 }
 
-if (-not $env:PING_RELEASE_BASE) {
-  $check = Test-ReleaseAsset -Repo $Repo -AssetName $asset
-  if ($check -and -not $check.Found) {
-    Write-Host ""
-    Write-Host "GitHub release '$($check.Tag)' exists but does not contain '$asset'." -ForegroundColor Red
-    Write-Host "Assets currently published:" -ForegroundColor Yellow
-    $check.Names | ForEach-Object { Write-Host "  - $_" }
-    Write-Host ""
-    Write-Host "Fix: run the 'Agent Release' workflow so the Windows build is uploaded:"
-    Write-Host "  https://github.com/$Repo/actions/workflows/agent-release.yml"
-    exit 1
-  }
-  if (-not $check) {
-    Write-Host ""
-    Write-Host "No GitHub release found for $Repo (or GitHub API unreachable)." -ForegroundColor Red
-    Write-Host "Fix: run the 'Agent Release' workflow once:"
-    Write-Host "  https://github.com/$Repo/actions/workflows/agent-release.yml"
-    Write-Host "Or set `$env:PING_RELEASE_BASE to a URL that hosts $asset."
-    exit 1
-  }
-}
-
-Write-Host "Downloading $url"
-try {
-  Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing -MaximumRedirection 10
-} catch {
+if (-not $downloaded) {
   Write-Host ""
-  Write-Host "Download failed: $($_.Exception.Message)" -ForegroundColor Red
-  Write-Host "URL: $url"
+  Write-Host "Could not download $asset from any source." -ForegroundColor Red
+  Write-Host "Tried:" -ForegroundColor Yellow
+  $errors | ForEach-Object { Write-Host "  - $_" }
   Write-Host ""
   Write-Host "Most common causes:"
-  Write-Host "  1. The release does not yet contain '$asset' — run the Agent Release workflow."
-  Write-Host "  2. Corporate proxy / antivirus blocking GitHub Releases."
-  Write-Host "  3. Old PowerShell without TLS 1.2 — run: [Net.ServicePointManager]::SecurityProtocol=3072"
-  exit 1
+  Write-Host "  1. Your published site has not been updated yet."
+  Write-Host "  2. Antivirus/proxy blocked the executable download."
+  Write-Host "  3. GitHub Releases has no latest release yet — this installer now uses Ping-hosted binaries first."
+  Fail-Install "Install failed before the agent could be downloaded."
 }
 
-# Sanity-check the download — a 404 page is much smaller than a real binary.
+try { Unblock-File -Path $dest -ErrorAction SilentlyContinue } catch {}
+
 $size = (Get-Item $dest).Length
-if ($size -lt 200000) {
-  Write-Host "Downloaded file is only $size bytes — likely an HTML 404 page, not the agent." -ForegroundColor Red
-  Remove-Item $dest -Force -ErrorAction SilentlyContinue
-  Write-Host "Check: $url"
-  exit 1
-}
 
 # Add install dir to the user PATH (persistent + current session)
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -118,8 +139,21 @@ if ($PairCode) {
   Write-Host "Running doctor ..."
   & $dest doctor
   Write-Host ""
-  Write-Host "Next: start polling for jobs with:"
-  Write-Host "  ping-agent run"
+  if ($env:PING_START -ne "0" -and $env:PING_START -ne "false") {
+    Write-Host "Starting Ping Agent in the background ..."
+    try {
+      $taskRun = "`"$dest`" run"
+      & schtasks.exe /Create /TN "Ping Agent" /SC ONLOGON /TR $taskRun /RL LIMITED /F | Out-Null
+      Start-Process -FilePath $dest -ArgumentList "run" -WindowStyle Hidden | Out-Null
+      Write-Host "Ping Agent is running and will start again at Windows logon." -ForegroundColor Green
+    } catch {
+      Write-Host "Could not auto-start the agent: $($_.Exception.Message)" -ForegroundColor Yellow
+      Write-Host "Start it manually with: ping-agent run"
+    }
+  } else {
+    Write-Host "Next: start polling for jobs with:"
+    Write-Host "  ping-agent run"
+  }
 } else {
   Write-Host ""
   Write-Host "Next:"
@@ -127,3 +161,5 @@ if ($PairCode) {
   Write-Host "  ping-agent doctor                # verify backend access"
   Write-Host "  ping-agent run                   # start polling for jobs"
 }
+
+try { Stop-Transcript | Out-Null } catch {}
