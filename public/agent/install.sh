@@ -6,13 +6,12 @@
 #   curl -fsSL https://ping.echoisp.click/agent/install.sh | sh -s -- <PAIRING_CODE>
 #
 # Env overrides:
-#   PING_RELEASE_BASE  override download base (default: GitHub latest release)
+#   PING_RELEASE_BASE  override download base (default: Ping-hosted binaries, then GitHub fallback)
 #   PING_REPO          owner/repo on GitHub  (default: caristofalldivision/ping)
 #   PING_INSTALL_DIR   install dir           (default: /usr/local/bin)
 set -e
 
 REPO="${PING_REPO:-caristofalldivision/ping}"
-RELEASE_BASE="${PING_RELEASE_BASE:-https://github.com/${REPO}/releases/latest/download}"
 INSTALL_DIR="${PING_INSTALL_DIR:-/usr/local/bin}"
 BIN="ping-agent"
 
@@ -29,27 +28,37 @@ case "$OS" in
 esac
 
 ASSET="${BIN}-${OS}-${ARCH}"
-URL="${RELEASE_BASE}/${ASSET}"
+TMP="$(mktemp)"
 
-# Preflight: HEAD check so we can give a useful message before downloading.
-if [ -z "$PING_RELEASE_BASE" ]; then
-  if command -v curl >/dev/null 2>&1; then
-    code="$(curl -s -o /dev/null -w '%{http_code}' -L -I "$URL" || echo 000)"
-    if [ "$code" = "404" ]; then
-      echo "Release asset not found: $ASSET" >&2
-      echo "Fix: run the Agent Release workflow at" >&2
-      echo "  https://github.com/${REPO}/actions/workflows/agent-release.yml" >&2
-      echo "Or set PING_RELEASE_BASE to a URL that hosts $ASSET." >&2
-      exit 1
-    fi
-  fi
+if [ -n "$PING_RELEASE_BASE" ]; then
+  BASES="${PING_RELEASE_BASE%/}"
+else
+  BASES="https://ping.echoisp.click/agent/bin https://ping.acyninnovation.com/agent/bin https://github.com/${REPO}/releases/latest/download"
 fi
 
-echo "-> Downloading $URL"
-TMP="$(mktemp)"
-if ! curl -fsSL "$URL" -o "$TMP"; then
-  echo "Download failed: $URL" >&2
-  echo "Set PING_RELEASE_BASE to override the source URL." >&2
+downloaded=0
+errors=""
+for base in $BASES; do
+  URL="${base}/${ASSET}"
+  echo "-> Downloading $URL"
+  if curl -fsSL "$URL" -o "$TMP"; then
+    size=$(wc -c < "$TMP" | tr -d ' ')
+    if [ "$size" -ge 200000 ]; then
+      downloaded=1
+      break
+    fi
+    errors="${errors}\n  - ${URL} -> downloaded file was only ${size} bytes"
+  else
+    errors="${errors}\n  - ${URL} -> curl failed"
+  fi
+  rm -f "$TMP"
+  TMP="$(mktemp)"
+done
+
+if [ "$downloaded" -ne 1 ]; then
+  echo "Could not download $ASSET from any source." >&2
+  printf "Tried:%b\n" "$errors" >&2
+  echo "If your site was just updated, publish/deploy once more and retry." >&2
   exit 1
 fi
 
