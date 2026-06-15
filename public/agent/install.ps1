@@ -1,14 +1,13 @@
 # Ping Agent installer (Windows / PowerShell)
 #
-# Usage (install only):
-#   iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex
+# Usage (install only, keeps errors visible):
+#   powershell -NoExit -ExecutionPolicy Bypass -Command "iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex"
 #
-# Usage (install + pair):
-#   $env:PING_CODE="ABC123"; iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex
+# Usage (install + pair, keeps errors visible):
+#   powershell -NoExit -ExecutionPolicy Bypass -Command "$env:PING_CODE='ABC123'; iwr -useb https://ping.echoisp.click/agent/install.ps1 | iex"
 #
 # Optional env vars:
-#   PING_RELEASE_BASE  override download base (default: Ping-hosted binaries, then GitHub fallback)
-#   PING_REPO          owner/repo on GitHub        (default: caristofalldivision/ping)
+#   PING_RELEASE_BASE  override download base (default: Ping-hosted binaries)
 #   PING_INSTALL_DIR   install location            (default: %LOCALAPPDATA%\Ping)
 #   PING_CODE          pairing code (runs `ping-agent pair` after install)
 #   PING_START         set to 0 to skip starting the agent after install+pair
@@ -52,7 +51,6 @@ try {
     [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 } catch {}
 
-$Repo       = if ($env:PING_REPO)        { $env:PING_REPO }        else { "caristofalldivision/ping" }
 $InstallDir = if ($env:PING_INSTALL_DIR) { $env:PING_INSTALL_DIR } else { "$env:LOCALAPPDATA\Ping" }
 $Bin        = "ping-agent.exe"
 $PairCode   = if ($env:PING_CODE)        { $env:PING_CODE }        else { $null }
@@ -68,7 +66,6 @@ if ($env:PING_RELEASE_BASE) {
 } else {
   $DownloadBases += "https://ping.echoisp.click/agent/bin"
   $DownloadBases += "https://ping.acyninnovation.com/agent/bin"
-  $DownloadBases += "https://github.com/$Repo/releases/latest/download"
 }
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
@@ -107,7 +104,7 @@ if (-not $downloaded) {
   Write-Host "Most common causes:"
   Write-Host "  1. Your published site has not been updated yet."
   Write-Host "  2. Antivirus/proxy blocked the executable download."
-  Write-Host "  3. GitHub Releases has no latest release yet — this installer now uses Ping-hosted binaries first."
+  Write-Host "  3. The hosted binary is not on the latest published site yet."
   Fail-Install "Install failed before the agent could be downloaded."
 }
 
@@ -133,6 +130,8 @@ if ($PairCode) {
   & $dest pair $PairCode
   if ($LASTEXITCODE -ne 0) {
     Write-Host "Pairing failed. You can retry with: ping-agent pair $PairCode" -ForegroundColor Red
+    Write-Host "Installer log: $LogFile" -ForegroundColor Yellow
+    Pause-OnError
     exit $LASTEXITCODE
   }
   Write-Host ""
