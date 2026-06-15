@@ -1,4 +1,4 @@
-BINARY := topha-agent
+BINARY := ping-agent
 VERSION := 0.2.0
 LDFLAGS := -s -w -X main.version=$(VERSION)
 DIST := dist
