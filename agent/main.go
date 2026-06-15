@@ -587,7 +587,7 @@ func newSSH(d device) (*sshExec, error) {
 	}
 	c, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", d.Host, port), cfg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s", friendlySSHError(err, d.Host, port))
 	}
 	return &sshExec{c: c}, nil
 }
