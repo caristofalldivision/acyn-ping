@@ -67,6 +67,7 @@ export const HotspotWizard = ({ device, onBack }: Props) => {
     const { data, error } = await supabase.functions.invoke("wizard-hotspot", {
       body: {
         device_name: device.name,
+        device_id: device.id,
         params: {
           ...params,
           payment_walled_garden: params.payment_walled_garden.split(",").map(s => s.trim()).filter(Boolean),
