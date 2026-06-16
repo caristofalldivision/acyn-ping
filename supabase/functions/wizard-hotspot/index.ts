@@ -284,8 +284,8 @@ function buildPlan(p: Params, deviceName: string, deviceId: string, backendUrl: 
         kind: "write",
         requires_confirm: true,
         commands: [
-          `/file remove [find name="${htmlDir}/login.html"]`,
-          `/file remove [find name="${htmlDir}/alogin.html"]`,
+          `:do { /file remove [find name="${htmlDir}/login.html"] } on-error={}`,
+          `:do { /file remove [find name="${htmlDir}/alogin.html"] } on-error={}`,
           `/file add name="${htmlDir}/login.html" contents="${rosEscape(loginHtml)}"`,
           `/file add name="${htmlDir}/alogin.html" contents="${rosEscape(aloginHtml)}"`,
         ],
