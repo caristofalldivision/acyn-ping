@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
       if (!device) return json({ plans: [] })
       const { data: plans } = await admin.from('plans')
         .select('id, name, price_kes, duration_minutes, bandwidth_profile')
-        .eq('user_id', device.user_id).eq('active', true).order('price_kes', { ascending: true })
+        .eq('user_id', device.user_id).eq('is_active', true).order('price_kes', { ascending: true })
       return json({ plans: plans || [] })
     }
 
