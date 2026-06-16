@@ -67,6 +67,7 @@ export const HotspotWizard = ({ device, onBack }: Props) => {
     const { data, error } = await supabase.functions.invoke("wizard-hotspot", {
       body: {
         device_name: device.name,
+        device_id: device.id,
         params: {
           ...params,
           payment_walled_garden: params.payment_walled_garden.split(",").map(s => s.trim()).filter(Boolean),
@@ -124,11 +125,11 @@ export const HotspotWizard = ({ device, onBack }: Props) => {
             {plan && (
               <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
                 <div className="flex items-center gap-2 font-medium text-amber-500 mb-1">
-                  <Undo2 className="w-3.5 h-3.5" /> Rollback options
+                  <Undo2 className="w-3.5 h-3.5" /> Rollback
                 </div>
                 <p className="text-muted-foreground mb-2">
-                  If anything looks wrong, run a rollback. Per-step rollback runs only the inverse of failed/applied steps.
-                  Full restore reverts to the safety backup taken before any writes.
+                  Runs the inverse of every write step. If you took a backup in Winbox before pairing,
+                  you can also restore it manually from Files.
                 </p>
                 <div className="flex gap-2 flex-wrap">
                   <Button size="sm" variant="outline" className="h-7 text-xs"
@@ -141,16 +142,6 @@ export const HotspotWizard = ({ device, onBack }: Props) => {
                       else { setActiveJobId(data.job_id); }
                     }}>
                     Run inverse rollback
-                  </Button>
-                  <Button size="sm" variant="outline" className="h-7 text-xs"
-                    onClick={async () => {
-                      const { data, error } = await supabase.functions.invoke("device-jobs", {
-                        body: { device_id: device.id, kind: "restore_backup", script_content: plan.backup_name },
-                      });
-                      if (error || !data?.job_id) toast({ title: "Failed", variant: "destructive" });
-                      else { setActiveJobId(data.job_id); }
-                    }}>
-                    Restore from backup
                   </Button>
                 </div>
               </div>
@@ -182,9 +173,11 @@ export const HotspotWizard = ({ device, onBack }: Props) => {
         <div className="max-w-2xl mx-auto space-y-4">
           {phase === "params" && (
             <>
-              <div className="rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground">
-                Ping will build a step-by-step plan, take a safety backup first, and ask you to confirm
-                before any write. Every write step has an inverse rollback.
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-200">
+                <strong className="text-amber-400">Before you continue:</strong> take a backup (Files → Backup) or
+                run <code className="text-foreground">/system reset-configuration no-defaults=yes skip-backup=yes</code> in
+                Winbox <em>before</em> the agent connects. The wizard will not back up or reset the router itself —
+                doing that over SSH drops the agent connection mid-configuration.
               </div>
               <Field label="Hotspot interface (must already exist)">
                 <input value={params.hotspot_interface} onChange={e => setParams(p => ({ ...p, hotspot_interface: e.target.value }))} className={inp} />
@@ -290,7 +283,8 @@ export const HotspotWizard = ({ device, onBack }: Props) => {
                 </div>
                 <p className="text-muted-foreground">
                   By clicking apply, the agent will execute the steps above on <span className="text-foreground">{device.name}</span>.
-                  A backup is taken first and rollback is available at any time.
+                  Each write step has an inverse rollback. The wizard does not back up or reset the router —
+                  do that yourself in Winbox before pairing if you need a clean slate.
                 </p>
               </div>
 
