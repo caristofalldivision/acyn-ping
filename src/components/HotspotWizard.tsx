@@ -283,7 +283,8 @@ export const HotspotWizard = ({ device, onBack }: Props) => {
                 </div>
                 <p className="text-muted-foreground">
                   By clicking apply, the agent will execute the steps above on <span className="text-foreground">{device.name}</span>.
-                  A backup is taken first and rollback is available at any time.
+                  Each write step has an inverse rollback. The wizard does not back up or reset the router —
+                  do that yourself in Winbox before pairing if you need a clean slate.
                 </p>
               </div>
 
