@@ -125,11 +125,11 @@ export const HotspotWizard = ({ device, onBack }: Props) => {
             {plan && (
               <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
                 <div className="flex items-center gap-2 font-medium text-amber-500 mb-1">
-                  <Undo2 className="w-3.5 h-3.5" /> Rollback options
+                  <Undo2 className="w-3.5 h-3.5" /> Rollback
                 </div>
                 <p className="text-muted-foreground mb-2">
-                  If anything looks wrong, run a rollback. Per-step rollback runs only the inverse of failed/applied steps.
-                  Full restore reverts to the safety backup taken before any writes.
+                  Runs the inverse of every write step. If you took a backup in Winbox before pairing,
+                  you can also restore it manually from Files.
                 </p>
                 <div className="flex gap-2 flex-wrap">
                   <Button size="sm" variant="outline" className="h-7 text-xs"
@@ -142,16 +142,6 @@ export const HotspotWizard = ({ device, onBack }: Props) => {
                       else { setActiveJobId(data.job_id); }
                     }}>
                     Run inverse rollback
-                  </Button>
-                  <Button size="sm" variant="outline" className="h-7 text-xs"
-                    onClick={async () => {
-                      const { data, error } = await supabase.functions.invoke("device-jobs", {
-                        body: { device_id: device.id, kind: "restore_backup", script_content: plan.backup_name },
-                      });
-                      if (error || !data?.job_id) toast({ title: "Failed", variant: "destructive" });
-                      else { setActiveJobId(data.job_id); }
-                    }}>
-                    Restore from backup
                   </Button>
                 </div>
               </div>
