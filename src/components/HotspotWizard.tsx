@@ -173,9 +173,11 @@ export const HotspotWizard = ({ device, onBack }: Props) => {
         <div className="max-w-2xl mx-auto space-y-4">
           {phase === "params" && (
             <>
-              <div className="rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground">
-                Ping will build a step-by-step plan, take a safety backup first, and ask you to confirm
-                before any write. Every write step has an inverse rollback.
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-200">
+                <strong className="text-amber-400">Before you continue:</strong> take a backup (Files → Backup) or
+                run <code className="text-foreground">/system reset-configuration no-defaults=yes skip-backup=yes</code> in
+                Winbox <em>before</em> the agent connects. The wizard will not back up or reset the router itself —
+                doing that over SSH drops the agent connection mid-configuration.
               </div>
               <Field label="Hotspot interface (must already exist)">
                 <input value={params.hotspot_interface} onChange={e => setParams(p => ({ ...p, hotspot_interface: e.target.value }))} className={inp} />
