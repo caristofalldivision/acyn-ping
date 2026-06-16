@@ -281,6 +281,20 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
 /user add name=ping group=ping password=STRONGPASS`}</code>
                 <p className="text-muted-foreground">Use these same credentials in step 3.</p>
               </div>
+
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs space-y-2">
+                <p className="font-medium text-amber-400">Backup or reset BEFORE the agent connects</p>
+                <p className="text-muted-foreground">
+                  The wizard does not back up or reset the router itself — both interrupt the SSH session mid-configuration.
+                  Do one of these in Winbox first, then pair:
+                </p>
+                <code className="block whitespace-pre-wrap font-mono text-[11px]">{`# A) Safety backup (recommended)
+/system backup save name=before-ping
+
+# B) Or fresh start (wipes everything, no default config)
+/system reset-configuration no-defaults=yes skip-backup=yes`}</code>
+                <p className="text-muted-foreground">Once SSH is back, generate a pairing code below — the agent will only configure, never reset.</p>
+              </div>
               <Button onClick={generateCode} disabled={generating} className="w-full">
                 {generating ? "Generating…" : "I've installed it — generate pairing code"}
               </Button>
