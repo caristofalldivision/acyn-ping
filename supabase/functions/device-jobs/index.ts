@@ -144,12 +144,22 @@ Deno.serve(async (req) => {
       if (!device) return json({ error: "device not found" }, 404);
       if (!device.agent_id) return json({ error: "device has no agent assigned" }, 400);
 
+      // Check if the agent is actually online. Still create the job either way
+      // so it picks up the moment the agent comes back, but warn the caller.
+      let warning: string | undefined;
+      const { data: ag } = await admin.from("device_agents")
+        .select("status, last_seen_at").eq("id", device.agent_id).maybeSingle();
+      const lastSeenMs = ag?.last_seen_at ? Date.now() - new Date(ag.last_seen_at).getTime() : Infinity;
+      if (!ag || ag.status !== "online" || lastSeenMs > 60_000) {
+        warning = "Agent appears offline. Start it on your machine with `ping-agent run` (or re-run the installer). The job will run automatically once the agent reconnects.";
+      }
+
       const { data: job, error } = await admin.from("device_jobs").insert({
         user_id: userId, device_id, kind, script_content: script_content ?? null,
         status: "pending",
       }).select("id").single();
       if (error) throw error;
-      return json({ job_id: job.id });
+      return json({ job_id: job.id, warning });
     }
 
     if (req.method === "GET" && (path === "/" || path === "")) {
