@@ -26,7 +26,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
+	osexec "os/exec"
 	"os/signal"
 	"os/user"
 	"path/filepath"
