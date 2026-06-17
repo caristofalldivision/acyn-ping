@@ -140,6 +140,16 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
                       <h3 className="text-sm font-medium truncate">{d.name}</h3>
                       <Badge variant="outline" className="text-[10px] uppercase">{d.vendor}</Badge>
                       <Badge variant={d.status === "online" ? "default" : "secondary"} className="text-[10px]">{d.status}</Badge>
+                      {d.agent_id && (() => {
+                        const a = agentStatuses[d.agent_id];
+                        const online = a?.status === "online" && a?.last_seen_at && (Date.now() - new Date(a.last_seen_at).getTime() < 60_000);
+                        return (
+                          <span className="inline-flex items-center gap-1 text-[10px]" title={online ? "Agent is polling" : "Agent is not polling — run `ping-agent run` on the machine where you installed it"}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${online ? "bg-green-500" : "bg-amber-500"}`} />
+                            <span className={online ? "text-green-500" : "text-amber-500"}>{online ? "agent online" : "agent offline"}</span>
+                          </span>
+                        );
+                      })()}
                     </div>
                     <p className="text-xs text-muted-foreground truncate">
                       {d.model || "Unknown model"} · {d.host || "—"} · via {d.connection_method.toUpperCase()}
