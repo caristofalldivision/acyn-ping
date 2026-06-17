@@ -918,3 +918,148 @@ func hostname() string {
 	}
 	return h
 }
+
+// ---------------- background service install ----------------
+//
+// installService registers ping-agent to run automatically and starts it now.
+// Best-effort and idempotent: returns an error but main() prints a friendly hint
+// so `ping-agent pair` still exits 0 even if registration fails.
+
+func installService() error {
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not resolve executable path: %w", err)
+	}
+	exePath, _ = filepath.Abs(exePath)
+
+	switch runtime.GOOS {
+	case "windows":
+		return installServiceWindows(exePath)
+	case "darwin":
+		return installServiceDarwin(exePath)
+	default:
+		return installServiceLinux(exePath)
+	}
+}
+
+func uninstallService() error {
+	switch runtime.GOOS {
+	case "windows":
+		_ = osexec.Command("schtasks.exe", "/End", "/TN", "Ping Agent").Run()
+		return osexec.Command("schtasks.exe", "/Delete", "/TN", "Ping Agent", "/F").Run()
+	case "darwin":
+		u, _ := user.Current()
+		plist := filepath.Join(u.HomeDir, "Library", "LaunchAgents", "click.echoisp.ping-agent.plist")
+		_ = osexec.Command("launchctl", "unload", "-w", plist).Run()
+		return os.Remove(plist)
+	default:
+		_ = osexec.Command("systemctl", "--user", "disable", "--now", "ping-agent").Run()
+		u, _ := user.Current()
+		unit := filepath.Join(u.HomeDir, ".config", "systemd", "user", "ping-agent.service")
+		return os.Remove(unit)
+	}
+}
+
+func installServiceWindows(exePath string) error {
+	// Register a scheduled task that runs at logon. /F overwrites if exists.
+	tr := fmt.Sprintf(`"%s" run`, exePath)
+	cmd := osexec.Command("schtasks.exe", "/Create", "/TN", "Ping Agent",
+		"/SC", "ONLOGON", "/TR", tr, "/RL", "LIMITED", "/F")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("schtasks failed: %v: %s", err, string(out))
+	}
+	// Start it now, detached so it survives this shell.
+	start := osexec.Command(exePath, "run")
+	start.SysProcAttr = &syscall.SysProcAttr{}
+	if err := start.Start(); err != nil {
+		return fmt.Errorf("start failed: %w", err)
+	}
+	_ = start.Process.Release()
+	return nil
+}
+
+func installServiceLinux(exePath string) error {
+	u, err := user.Current()
+	if err != nil {
+		return err
+	}
+	// Prefer systemd --user. If missing, fall back to nohup.
+	if _, err := osexec.LookPath("systemctl"); err == nil {
+		unitDir := filepath.Join(u.HomeDir, ".config", "systemd", "user")
+		if err := os.MkdirAll(unitDir, 0o755); err != nil {
+			return err
+		}
+		unit := fmt.Sprintf(`[Unit]
+Description=Ping Agent
+
+[Service]
+ExecStart=%s run
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+`, exePath)
+		if err := os.WriteFile(filepath.Join(unitDir, "ping-agent.service"), []byte(unit), 0o644); err != nil {
+			return err
+		}
+		_ = osexec.Command("systemctl", "--user", "daemon-reload").Run()
+		if out, err := osexec.Command("systemctl", "--user", "enable", "--now", "ping-agent").CombinedOutput(); err != nil {
+			// systemd --user often needs a logind session; fall through to nohup.
+			fmt.Println("systemctl --user not usable (", strings.TrimSpace(string(out)), ") — falling back to nohup")
+		} else {
+			return nil
+		}
+	}
+	return spawnNohup(exePath)
+}
+
+func installServiceDarwin(exePath string) error {
+	u, err := user.Current()
+	if err != nil {
+		return err
+	}
+	plistDir := filepath.Join(u.HomeDir, "Library", "LaunchAgents")
+	if err := os.MkdirAll(plistDir, 0o755); err != nil {
+		return err
+	}
+	plistPath := filepath.Join(plistDir, "click.echoisp.ping-agent.plist")
+	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>click.echoisp.ping-agent</string>
+  <key>ProgramArguments</key>
+  <array><string>%s</string><string>run</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/tmp/ping-agent.log</string>
+  <key>StandardErrorPath</key><string>/tmp/ping-agent.log</string>
+</dict>
+</plist>
+`, exePath)
+	if err := os.WriteFile(plistPath, []byte(plist), 0o644); err != nil {
+		return err
+	}
+	_ = osexec.Command("launchctl", "unload", plistPath).Run()
+	if out, err := osexec.Command("launchctl", "load", "-w", plistPath).CombinedOutput(); err != nil {
+		fmt.Println("launchctl load failed (", strings.TrimSpace(string(out)), ") — falling back to nohup")
+		return spawnNohup(exePath)
+	}
+	return nil
+}
+
+func spawnNohup(exePath string) error {
+	logf, _ := os.OpenFile("/tmp/ping-agent.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	cmd := osexec.Command(exePath, "run")
+	if logf != nil {
+		cmd.Stdout = logf
+		cmd.Stderr = logf
+	}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	_ = cmd.Process.Release()
+	return nil
+}
