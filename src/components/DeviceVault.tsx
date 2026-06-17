@@ -29,6 +29,7 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
   const [showAdd, setShowAdd] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [wizardDevice, setWizardDevice] = useState<Device | null>(null);
+  const [agentStatuses, setAgentStatuses] = useState<Record<string, { status: string; last_seen_at: string | null }>>({});
   const { toast } = useToast();
 
   const load = async () => {
@@ -40,11 +41,27 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
-    if (!error && data) setDevices(data as any);
+    if (!error && data) {
+      setDevices(data as any);
+      const agentIds = Array.from(new Set((data as any[]).map(d => d.agent_id).filter(Boolean)));
+      if (agentIds.length) {
+        const { data: ags } = await supabase
+          .from("device_agents" as any)
+          .select("id, status, last_seen_at")
+          .in("id", agentIds);
+        const map: Record<string, any> = {};
+        (ags || []).forEach((a: any) => { map[a.id] = { status: a.status, last_seen_at: a.last_seen_at }; });
+        setAgentStatuses(map);
+      }
+    }
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    const iv = setInterval(load, 10000);
+    return () => clearInterval(iv);
+  }, []);
 
   const remove = async (id: string) => {
     const { error } = await supabase.from("devices" as any).delete().eq("id", id);
