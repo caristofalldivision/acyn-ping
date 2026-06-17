@@ -1,48 +1,64 @@
-## Plan
+# Why jobs stay stuck at "Waiting for agent…"
 
-1. **Fix the release workflow warning and binary mismatch**
-   - Add `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` to `.github/workflows/agent-release.yml` so GitHub Actions runs JavaScript actions on Node 24 now.
-   - Fix `agent/Makefile` from `topha-agent` to `ping-agent`; this is currently why releases would upload the wrong binary names while the installer downloads `ping-agent-windows-amd64.exe`.
-   - Update `agent/go.mod` module name away from old `topha` naming.
+Pairing works, but the agent **process is not running** after install in the common path.
 
-2. **Make PowerShell install reliable and easier to diagnose**
-   - Improve `public/agent/install.ps1` so it fails with a clear exact reason when the GitHub release asset is missing, instead of dying immediately.
-   - Add a GitHub API fallback check for the latest release and show the exact missing asset name.
-   - Support install-only and install+pair reliably via `$env:PING_CODE`.
-   - After install, run `ping-agent status` or `ping-agent doctor` so the user immediately sees whether pairing/backend access works.
-   - Keep only the Vercel-hosted domains: `ping.echoisp.click` primary and `ping.acyninnovation.com` mirror.
+- The PowerShell installer only registers the scheduled task **when a `PING_CODE` is passed at install time**. The Device Vault install command does NOT pass one — users install, then run `ping-agent pair <CODE>` manually.
+- `pair` only writes the config file. It does **not** start the polling loop.
+- Result: `device-jobs` is enqueued, but no agent is polling `/device-jobs/pending`, so JobLog sits on "Waiting for agent…" forever.
+- Nothing on the server side is actually broken — `device-jobs/pending`, the bridge, and the wizard work as soon as the agent process exists.
 
-3. **Improve Linux/macOS installer parity**
-   - Update `public/agent/install.sh` with the same clearer missing-release diagnostics.
-   - Keep binary names aligned with the fixed `Makefile` output.
+# Fix (minimal, additive — does not break installs or pairing)
 
-4. **Harden the agent for first MikroTik configuration**
-   - Add `ping-agent doctor --router <host> --user <user> --password <password> [--port 22]` to test MikroTik SSH reachability before running jobs.
-   - Improve SSH command execution with clearer errors for auth failure, timeout, disabled SSH, and wrong port.
-   - Add a lightweight `ping-agent test-router ...` alias or doctor mode that runs `/system resource print` and confirms RouterOS version/model.
-   - Keep SSH as the primary Winbox-friendly path for RouterOS v6/v7.
+## 1. Make `pair` self-bootstrap the background runner
 
-5. **Fix backend job compatibility gaps**
-   - Ensure `deploy_portal` is accepted by `device-jobs` if the UI/agent can create or execute that job kind.
-   - Confirm agent endpoints return clean JSON and that pairing/pending polling still work after changes.
+In `agent/main.go`:
 
-6. **Update UI/docs for the new working commands**
-   - Update Device Vault install copy blocks and README to show `ping-agent doctor` and the MikroTik preflight command.
-   - Remove any remaining old `topha` user-facing references found during the scan.
+- After `doPair` succeeds, call a new `installService()` that:
+  - **Windows**: `schtasks /Create /TN "Ping Agent" /SC ONLOGON /TR "<exe> run" /RL LIMITED /F`, then `Start-Process` the exe with `run` detached (same as today's installer block, just moved into the agent itself so it runs whenever the user pairs, regardless of how they installed).
+  - **Linux**: write `~/.config/systemd/user/ping-agent.service`, `systemctl --user daemon-reload && systemctl --user enable --now ping-agent` if `systemctl` is on PATH; otherwise spawn `nohup ping-agent run >/tmp/ping-agent.log 2>&1 &`.
+  - **macOS**: write `~/Library/LaunchAgents/click.echoisp.ping-agent.plist` and `launchctl load -w` it; fallback to `nohup`.
+- All three branches are **idempotent** and **best-effort**: any failure prints a friendly hint ("background start failed — run `ping-agent run` manually") and `pair` still exits 0.
+- Also expose it as a standalone command: `ping-agent install-service` (so users who paired with an older binary can run it once).
+- Print a final line: `agent running in background — JobLog will start updating within ~5s`.
 
-7. **End-to-end validation**
-   - Build the agent locally to confirm the binary is named `ping-agent-*`.
-   - Run agent pairing against the backend using a generated pairing code.
-   - Run `ping-agent doctor` against the backend.
-   - Verify the Vercel installer URLs serve the latest scripts.
-   - Verify GitHub release asset URLs match the installer’s expected names.
+## 2. Update installers to call `pair` (which now auto-starts)
 
-## Important external blocker
+- `public/agent/install.ps1`: leave existing behavior; remove the duplicated `schtasks` block inside the `PING_CODE` branch (it now happens inside `ping-agent pair`). Keeps the script simpler and avoids double-registration.
+- `public/agent/install.sh`: same — when `PING_CODE` is set, just call `ping-agent pair $PING_CODE`. The agent handles service install.
 
-Right now both Vercel install scripts are reachable, but GitHub returns `404` for:
+## 3. Surface "agent running" in Device Vault
 
-```text
-https://github.com/caristofalldivision/ping/releases/latest/download/ping-agent-windows-amd64.exe
-```
+In `src/components/DeviceVault.tsx`:
 
-So the installer cannot succeed until the GitHub release workflow publishes assets with the corrected `ping-agent-*` names. This plan fixes the workflow and naming, but the release still needs to be run once after the changes sync to GitHub.
+- Next to the **Add Router** button (or in the device row), show a small dot + label driven by `device_agents.status`:
+  - `online` → green "Agent online"
+  - `registered` / `offline` → amber "Agent paired but not polling — run `ping-agent run` (or re-run installer)"
+- In `runJob`, before enqueueing, fetch the latest `device_agents.status` for the device's agent; if not `online`, toast a clear actionable warning instead of silently enqueuing a job that will time out.
+- Add a one-line note under the install commands: "After pairing, the agent installs itself as a background service. If your computer reboots, it comes back automatically."
+
+## 4. Safety net on the server (no behavior change for healthy path)
+
+In `supabase/functions/device-jobs/index.ts`:
+
+- When a job is enqueued (POST `/`), check `device_agents.status` and `last_seen_at` for the device's `agent_id`. If status != `online` OR `last_seen_at` older than 60s, still create the job (so it picks up the moment the agent comes back), but **return a `warning` field** in the response: `{ job_id, warning: "Agent appears offline — start ping-agent on your machine." }`.
+- `DeviceVault.runJob` surfaces this warning via toast.
+
+## Files touched
+
+- `agent/main.go` — add `installService()` and call from `doPair`; add `install-service` subcommand.
+- `public/agent/install.ps1` — drop the inline scheduled-task block; rely on `pair` for service registration.
+- `public/agent/install.sh` — same simplification; rebuild any references.
+- `src/components/DeviceVault.tsx` — agent status badge + pre-flight check on `runJob` + small docs line.
+- `supabase/functions/device-jobs/index.ts` — return non-fatal `warning` when agent is offline at enqueue time.
+
+## What is intentionally NOT touched
+
+- `device-agent-bridge`, `device-pair`, `wizard-hotspot`, `captive-portal-pay`, agent transport / SSH / REST code, pairing UI flow, AI / chat / billing — all unchanged.
+- Rebuilt agent binaries in `public/agent/bin/` will need to be regenerated after the Go change; the existing CI workflow already covers Windows/Linux/macOS amd64+arm64.
+
+## Validation
+
+1. Fresh Windows VM: install → pair → confirm scheduled task exists and `tasklist` shows `ping-agent.exe`. Click "Fetch config" in Device Vault → JobLog goes pending → running → success.
+2. Linux: install → pair → `systemctl --user status ping-agent` shows active. Same Device Vault round-trip.
+3. macOS: install → pair → `launchctl list | grep ping-agent` shows it. Same Device Vault round-trip.
+4. Negative path: stop the service, click "Fetch config" — toast warns "Agent appears offline", JobLog still appears and resumes when service is restarted.
