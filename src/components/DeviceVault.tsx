@@ -295,7 +295,7 @@ const AddDevice = ({ onBack }: { onBack: () => void }) => {
                   <p className="text-[10px] text-muted-foreground mt-2">Mirror: https://ping.acyninnovation.com</p>
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-2">
-                  Supports SSH (RouterOS v6 + v7, the same way you use Winbox) and REST API (v7.1+).
+                  Supports SSH (RouterOS v6 + v7) and REST API (v7.1+). After pairing, the agent installs itself as a background service and survives reboots.
                 </p>
               </div>
 
