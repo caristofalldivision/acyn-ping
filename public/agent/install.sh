@@ -79,17 +79,14 @@ fi
 echo "OK  Installed $INSTALL_DIR/$BIN"
 
 if [ -n "$1" ]; then
-  echo "-> Pairing with code $1"
+  echo "-> Pairing with code $1 (also installs background service)"
   "$INSTALL_DIR/$BIN" pair "$1"
   echo ""
   echo "-> Verifying with doctor"
   "$INSTALL_DIR/$BIN" doctor || true
-  echo ""
-  echo "Next: $BIN run    (or set up a systemd service - see agent/README.md)"
 else
   echo ""
   echo "Next:"
-  echo "  $BIN pair <PAIRING_CODE>   # from Ping -> Device Vault"
+  echo "  $BIN pair <PAIRING_CODE>   # from Ping -> Device Vault (auto-starts background runner)"
   echo "  $BIN doctor                # verify backend access"
-  echo "  $BIN run                   # start polling for jobs"
 fi

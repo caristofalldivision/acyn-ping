@@ -127,6 +127,8 @@ Write-Host "Installed $dest ($([math]::Round($size/1MB,1)) MB)" -ForegroundColor
 if ($PairCode) {
   Write-Host ""
   Write-Host "Pairing with code $PairCode ..."
+  # `ping-agent pair` now also registers the scheduled task and starts the
+  # background runner automatically, so the user doesn't need a second step.
   & $dest pair $PairCode
   if ($LASTEXITCODE -ne 0) {
     Write-Host "Pairing failed. You can retry with: ping-agent pair $PairCode" -ForegroundColor Red
@@ -137,28 +139,11 @@ if ($PairCode) {
   Write-Host ""
   Write-Host "Running doctor ..."
   & $dest doctor
-  Write-Host ""
-  if ($env:PING_START -ne "0" -and $env:PING_START -ne "false") {
-    Write-Host "Starting Ping Agent in the background ..."
-    try {
-      $taskRun = "`"$dest`" run"
-      & schtasks.exe /Create /TN "Ping Agent" /SC ONLOGON /TR $taskRun /RL LIMITED /F | Out-Null
-      Start-Process -FilePath $dest -ArgumentList "run" -WindowStyle Hidden | Out-Null
-      Write-Host "Ping Agent is running and will start again at Windows logon." -ForegroundColor Green
-    } catch {
-      Write-Host "Could not auto-start the agent: $($_.Exception.Message)" -ForegroundColor Yellow
-      Write-Host "Start it manually with: ping-agent run"
-    }
-  } else {
-    Write-Host "Next: start polling for jobs with:"
-    Write-Host "  ping-agent run"
-  }
 } else {
   Write-Host ""
   Write-Host "Next:"
-  Write-Host "  ping-agent pair <PAIRING_CODE>   # from Ping -> Device Vault"
+  Write-Host "  ping-agent pair <PAIRING_CODE>   # from Ping -> Device Vault (also auto-starts background runner)"
   Write-Host "  ping-agent doctor                # verify backend access"
-  Write-Host "  ping-agent run                   # start polling for jobs"
 }
 
 try { Stop-Transcript | Out-Null } catch {}

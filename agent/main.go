@@ -26,9 +26,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+	osexec "os/exec"
 	"os/signal"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -95,7 +97,7 @@ type portalPayload struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("usage: ping-agent <pair <code> | run | status | doctor [--router HOST --user U --password P [--port 22]]>")
+		fmt.Println("usage: ping-agent <pair <code> | run | status | doctor | install-service | uninstall-service>")
 		os.Exit(1)
 	}
 	switch os.Args[1] {
@@ -107,6 +109,14 @@ func main() {
 			die(err.Error())
 		}
 		fmt.Println("paired successfully")
+		// Self-bootstrap: register as a background service and start polling now,
+		// so the user doesn't have to remember `ping-agent run`.
+		if err := installService(); err != nil {
+			fmt.Println("note: could not auto-start in background:", err)
+			fmt.Println("      start it manually with: ping-agent run")
+		} else {
+			fmt.Println("agent running in background — Device Vault will start updating within ~5s")
+		}
 	case "run":
 		runLoop()
 	case "status":
@@ -115,6 +125,16 @@ func main() {
 			die(err.Error())
 		}
 		fmt.Printf("agent_id=%s base=%s\n", c.AgentID, c.BaseURL)
+	case "install-service":
+		if err := installService(); err != nil {
+			die(err.Error())
+		}
+		fmt.Println("background service installed and started")
+	case "uninstall-service":
+		if err := uninstallService(); err != nil {
+			die(err.Error())
+		}
+		fmt.Println("background service removed")
 	case "doctor":
 		// Optional MikroTik reachability test: ping-agent doctor --router H --user U --password P [--port 22]
 		if len(os.Args) > 2 {
@@ -898,3 +918,47 @@ func hostname() string {
 	}
 	return h
 }
+
+// ---------------- background service install ----------------
+//
+// installService registers ping-agent to run automatically and starts it now.
+// Best-effort and idempotent: returns an error but main() prints a friendly hint
+// so `ping-agent pair` still exits 0 even if registration fails.
+
+func installService() error {
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not resolve executable path: %w", err)
+	}
+	exePath, _ = filepath.Abs(exePath)
+
+	switch runtime.GOOS {
+	case "windows":
+		return installServiceWindows(exePath)
+	case "darwin":
+		return installServiceDarwin(exePath)
+	default:
+		return installServiceLinux(exePath)
+	}
+}
+
+func uninstallService() error {
+	switch runtime.GOOS {
+	case "windows":
+		_ = osexec.Command("schtasks.exe", "/End", "/TN", "Ping Agent").Run()
+		return osexec.Command("schtasks.exe", "/Delete", "/TN", "Ping Agent", "/F").Run()
+	case "darwin":
+		u, _ := user.Current()
+		plist := filepath.Join(u.HomeDir, "Library", "LaunchAgents", "click.echoisp.ping-agent.plist")
+		_ = osexec.Command("launchctl", "unload", "-w", plist).Run()
+		return os.Remove(plist)
+	default:
+		_ = osexec.Command("systemctl", "--user", "disable", "--now", "ping-agent").Run()
+		u, _ := user.Current()
+		unit := filepath.Join(u.HomeDir, ".config", "systemd", "user", "ping-agent.service")
+		return os.Remove(unit)
+	}
+}
+
+// Platform-specific implementations of installServiceWindows / Linux / Darwin
+// and spawnNohup live in service_windows.go and service_unix.go.
