@@ -64,6 +64,9 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
       toast({ title: "Failed to enqueue", description: error?.message, variant: "destructive" });
       return;
     }
+    if (data.warning) {
+      toast({ title: "Agent offline", description: data.warning, variant: "destructive" });
+    }
     setActiveJobId(data.job_id);
   };
 
