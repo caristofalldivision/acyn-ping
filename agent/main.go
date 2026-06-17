@@ -97,7 +97,7 @@ type portalPayload struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("usage: ping-agent <pair <code> | run | status | doctor [--router HOST --user U --password P [--port 22]]>")
+		fmt.Println("usage: ping-agent <pair <code> | run | status | doctor | install-service | uninstall-service>")
 		os.Exit(1)
 	}
 	switch os.Args[1] {
@@ -109,6 +109,14 @@ func main() {
 			die(err.Error())
 		}
 		fmt.Println("paired successfully")
+		// Self-bootstrap: register as a background service and start polling now,
+		// so the user doesn't have to remember `ping-agent run`.
+		if err := installService(); err != nil {
+			fmt.Println("note: could not auto-start in background:", err)
+			fmt.Println("      start it manually with: ping-agent run")
+		} else {
+			fmt.Println("agent running in background — Device Vault will start updating within ~5s")
+		}
 	case "run":
 		runLoop()
 	case "status":
@@ -117,6 +125,16 @@ func main() {
 			die(err.Error())
 		}
 		fmt.Printf("agent_id=%s base=%s\n", c.AgentID, c.BaseURL)
+	case "install-service":
+		if err := installService(); err != nil {
+			die(err.Error())
+		}
+		fmt.Println("background service installed and started")
+	case "uninstall-service":
+		if err := uninstallService(); err != nil {
+			die(err.Error())
+		}
+		fmt.Println("background service removed")
 	case "doctor":
 		// Optional MikroTik reachability test: ping-agent doctor --router H --user U --password P [--port 22]
 		if len(os.Args) > 2 {
