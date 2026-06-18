@@ -46,9 +46,11 @@ async function authAgent(req: Request): Promise<{ agent_id: string; user_id: str
     .eq("id", id).maybeSingle();
   if (!agent || agent.status === "pending") return null;
   if (await sha256(secret) !== agent.agent_secret_hash) return null;
+  // Any successful authenticated poll means the agent is online RIGHT NOW.
+  // Previously we set status to "registered" which made the UI always show "offline".
   await admin.from("device_agents").update({
     last_seen_at: new Date().toISOString(),
-    status: agent.status === "offline" ? "registered" : agent.status,
+    status: "online",
   }).eq("id", id);
   return { agent_id: agent.id, user_id: agent.user_id };
 }
