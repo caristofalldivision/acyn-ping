@@ -1,64 +1,90 @@
-# Why jobs stay stuck at "Waiting for agent…"
+# Plan: Own Gemini Key + Smarter Router AI + Fix False "Agent Offline"
 
-Pairing works, but the agent **process is not running** after install in the common path.
+Three independent pieces. None of them touch the working pairing, installer, captive portal, hotspot wizard, or agent transport.
 
-- The PowerShell installer only registers the scheduled task **when a `PING_CODE` is passed at install time**. The Device Vault install command does NOT pass one — users install, then run `ping-agent pair <CODE>` manually.
-- `pair` only writes the config file. It does **not** start the polling loop.
-- Result: `device-jobs` is enqueued, but no agent is polling `/device-jobs/pending`, so JobLog sits on "Waiting for agent…" forever.
-- Nothing on the server side is actually broken — `device-jobs/pending`, the bridge, and the wizard work as soon as the agent process exists.
+---
 
-# Fix (minimal, additive — does not break installs or pairing)
+## 1. Bring-your-own Gemini API key (replaces Lovable AI for chat)
 
-## 1. Make `pair` self-bootstrap the background runner
+**Storage.** Add three columns to `app_settings` (per-user, already RLS-scoped):
+- `ai_provider text default 'lovable'` — `'lovable' | 'gemini'`
+- `gemini_api_key text` — user's key from aistudio.google.com
+- `gemini_model text default 'gemini-2.5-pro'` — `gemini-2.5-pro` | `gemini-2.5-flash` | `gemini-3-pro-preview`
 
-In `agent/main.go`:
+**UI.** In `ProviderSettings.tsx`, add a new "AI Model" section:
+- Provider radio (Lovable default / My Gemini key)
+- Key input (password) + model dropdown + "Test key" button (calls a new lightweight `ai-test-key` edge function that does a 1-token completion against Google's API and returns ok/error).
+- Help link to `aistudio.google.com/apikey`.
 
-- After `doPair` succeeds, call a new `installService()` that:
-  - **Windows**: `schtasks /Create /TN "Ping Agent" /SC ONLOGON /TR "<exe> run" /RL LIMITED /F`, then `Start-Process` the exe with `run` detached (same as today's installer block, just moved into the agent itself so it runs whenever the user pairs, regardless of how they installed).
-  - **Linux**: write `~/.config/systemd/user/ping-agent.service`, `systemctl --user daemon-reload && systemctl --user enable --now ping-agent` if `systemctl` is on PATH; otherwise spawn `nohup ping-agent run >/tmp/ping-agent.log 2>&1 &`.
-  - **macOS**: write `~/Library/LaunchAgents/click.echoisp.ping-agent.plist` and `launchctl load -w` it; fallback to `nohup`.
-- All three branches are **idempotent** and **best-effort**: any failure prints a friendly hint ("background start failed — run `ping-agent run` manually") and `pair` still exits 0.
-- Also expose it as a standalone command: `ping-agent install-service` (so users who paired with an older binary can run it once).
-- Print a final line: `agent running in background — JobLog will start updating within ~5s`.
+**Backend.** Add `supabase/functions/_shared/ai-call.ts` — a single helper `callAI({ userId, messages, model, temperature, tools, json })` that:
+1. Loads `app_settings` for `userId`.
+2. If `ai_provider='gemini'` and key present → POST to `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key=...`, mapping the OpenAI-style messages/tools to Gemini's `contents`/`tools`/`generationConfig` shape (and back).
+3. Otherwise → existing Lovable Gateway path (`ai.gateway.lovable.dev`, `LOVABLE_API_KEY`).
+4. Returns a normalised `{ content, tool_calls, usage }` so callers don't change.
 
-## 2. Update installers to call `pair` (which now auto-starts)
+Refactor `chat/index.ts`, `background-learning/index.ts`, `analyze-conversations/index.ts` to use `callAI`. Nothing else changes — same prompts, same tools, same streaming envelope. Streaming for `chat` uses Gemini's `:streamGenerateContent?alt=sse` when provider is gemini.
 
-- `public/agent/install.ps1`: leave existing behavior; remove the duplicated `schtasks` block inside the `PING_CODE` branch (it now happens inside `ping-agent pair`). Keeps the script simpler and avoids double-registration.
-- `public/agent/install.sh`: same — when `PING_CODE` is set, just call `ping-agent pair $PING_CODE`. The agent handles service install.
+**Failure behaviour.** If user's Gemini key 401/429s, surface the exact provider error in chat (toast + assistant message) instead of silently falling back, so the user knows to fix billing.
 
-## 3. Surface "agent running" in Device Vault
+---
 
-In `src/components/DeviceVault.tsx`:
+## 2. Higher-accuracy router configuration (RAG + reasoning + self-check)
 
-- Next to the **Add Router** button (or in the device row), show a small dot + label driven by `device_agents.status`:
-  - `online` → green "Agent online"
-  - `registered` / `offline` → amber "Agent paired but not polling — run `ping-agent run` (or re-run installer)"
-- In `runJob`, before enqueueing, fetch the latest `device_agents.status` for the device's agent; if not `online`, toast a clear actionable warning instead of silently enqueuing a job that will time out.
-- Add a one-line note under the install commands: "After pairing, the agent installs itself as a background service. If your computer reboots, it comes back automatically."
+Goal: scripts that run first time on MikroTik with no back-and-forth.
 
-## 4. Safety net on the server (no behavior change for healthy path)
+**a. Device-aware context.** Before each chat turn that mentions a device or config, `chat/index.ts` now pulls:
+- `devices` row for any device_id referenced (model, `routeros_version`, last known interfaces) — currently ignored.
+- `saved_scripts` snippets the user has previously approved (top 5 by recency, filtered to vendor=mikrotik).
+- `user_knowledge` + `learned_knowledge` (already pulled) — keep, but rank by keyword overlap with the new message instead of dumping all rows.
 
-In `supabase/functions/device-jobs/index.ts`:
+These are injected as a compact `<device_facts>` / `<known_good_snippets>` block in the system prompt.
 
-- When a job is enqueued (POST `/`), check `device_agents.status` and `last_seen_at` for the device's `agent_id`. If status != `online` OR `last_seen_at` older than 60s, still create the job (so it picks up the moment the agent comes back), but **return a `warning` field** in the response: `{ job_id, warning: "Agent appears offline — start ping-agent on your machine." }`.
-- `DeviceVault.runJob` surfaces this warning via toast.
+**b. Reasoning model + thinking budget.** When provider is Gemini and the message looks like a config task (regex on words like `mikrotik|pppoe|hotspot|firewall|nat|bridge|vlan|script`), use `gemini-2.5-pro` with `generationConfig.thinkingConfig.thinkingBudget=4096`. For chit-chat, keep `gemini-2.5-flash`. Same toggle for Lovable path.
+
+**c. Structured RouterOS validator.** New `supabase/functions/_shared/ros-lint.ts` — pure-TS lint pass:
+- Reject `/system reset-configuration`, `/system backup`, lines with unescaped `"` / `$`, lines >4096 chars, commands not starting with `/` or `:`.
+- Warn on dangerous patterns (`/ip address remove`, `disable ether1`, etc.) used without a `:do {} on-error={}` wrapper.
+- Returns `{ ok, errors[], warnings[], normalized }`.
+
+The chat tool that emits a script (`generate_mikrotik_script` or equivalent) now runs `ros-lint` before returning. On errors, the function re-prompts the model up to 2x with the lint errors appended — fully internal, user never sees the broken attempt.
+
+**d. Self-check loop on the agent side.** In `agent/main.go` `apply_script` handler: after the SSH/REST `import` finishes, parse the output for `failure:`/`syntax error`/`expected command name` lines; if found, mark job `failed` with the specific line number and a hint, instead of "success" with hidden errors. (Backup/reset are still not touched — the user runs those manually as we set up last round.)
+
+**e. RAG retrieval.** Replace the current "dump all knowledge rows" with a simple but effective scorer: tokenise the user message, score each knowledge/saved-script row by token overlap + recency, keep top N under a 6 KB budget. No embeddings needed yet — keeps it cheap and works with BYO key.
+
+---
+
+## 3. Fix "agent online but system says offline"
+
+**Root cause** (confirmed in `device-jobs/index.ts` line 51 and the warning check at line ~155): when the agent polls `/pending` over HTTP, `authAgent` sets `status` to `"registered"` (only `device-agent-bridge` WebSocket sets `"online"`). But the offline warning and the UI badge both compare against `"online"` strictly, so an HTTP-polling agent is *always* flagged offline even while it's actively polling every 5 s.
+
+**Fix.**
+1. `device-jobs/index.ts` `authAgent`: set `status = "online"` on every successful poll (regardless of previous value, except `pending`).
+2. `device-jobs/index.ts` job-enqueue warning: treat agent as online if `status in ('online','registered')` **and** `last_seen_at` within `pollInterval * 3 ≈ 20 s` (was 60 s — too lax, also missed the status mismatch).
+3. `DeviceVault.tsx` status badge: same rule (`online` || (`registered` && last_seen < 20s)) → green; otherwise amber.
+4. Add a tiny `/heartbeat` POST in `device-jobs` and call it from the agent every 10 s even when there are no jobs (it's already polling `/pending` every 5 s, so this is mostly belt-and-braces and gives us a clean `last_seen_at` if pending ever 304s).
+5. On agent shutdown (SIGTERM/SIGINT), send a final `status=offline` so the badge flips immediately instead of waiting 20 s.
+
+No changes to `device-agent-bridge`, pairing, secrets, or the bundled binaries' install flow — but the agent binary itself does get rebuilt and re-bundled under `public/agent/bin/` along with a refreshed `SHA256SUMS`.
+
+---
 
 ## Files touched
 
-- `agent/main.go` — add `installService()` and call from `doPair`; add `install-service` subcommand.
-- `public/agent/install.ps1` — drop the inline scheduled-task block; rely on `pair` for service registration.
-- `public/agent/install.sh` — same simplification; rebuild any references.
-- `src/components/DeviceVault.tsx` — agent status badge + pre-flight check on `runJob` + small docs line.
-- `supabase/functions/device-jobs/index.ts` — return non-fatal `warning` when agent is offline at enqueue time.
+- `src/components/ProviderSettings.tsx` — AI provider section
+- `src/components/DeviceVault.tsx` — relaxed online check
+- `supabase/migrations/<new>.sql` — 3 columns on `app_settings`
+- `supabase/functions/_shared/ai-call.ts` *(new)*
+- `supabase/functions/_shared/ros-lint.ts` *(new)*
+- `supabase/functions/ai-test-key/index.ts` *(new)*
+- `supabase/functions/chat/index.ts` — use `callAI`, device-aware RAG, reasoning toggle, lint+retry
+- `supabase/functions/background-learning/index.ts` — use `callAI`
+- `supabase/functions/analyze-conversations/index.ts` — use `callAI`
+- `supabase/functions/device-jobs/index.ts` — status=online on poll, 20 s threshold, `/heartbeat`
+- `agent/main.go` — heartbeat ticker, shutdown offline, parse RouterOS output for errors
+- `public/agent/bin/*` + `SHA256SUMS` — rebuild
+- `supabase/config.toml` — register `ai-test-key`
 
-## What is intentionally NOT touched
+## Explicitly NOT touched
 
-- `device-agent-bridge`, `device-pair`, `wizard-hotspot`, `captive-portal-pay`, agent transport / SSH / REST code, pairing UI flow, AI / chat / billing — all unchanged.
-- Rebuilt agent binaries in `public/agent/bin/` will need to be regenerated after the Go change; the existing CI workflow already covers Windows/Linux/macOS amd64+arm64.
-
-## Validation
-
-1. Fresh Windows VM: install → pair → confirm scheduled task exists and `tasklist` shows `ping-agent.exe`. Click "Fetch config" in Device Vault → JobLog goes pending → running → success.
-2. Linux: install → pair → `systemctl --user status ping-agent` shows active. Same Device Vault round-trip.
-3. macOS: install → pair → `launchctl list | grep ping-agent` shows it. Same Device Vault round-trip.
-4. Negative path: stop the service, click "Fetch config" — toast warns "Agent appears offline", JobLog still appears and resumes when service is restarted.
+Pairing, installer scripts, captive portal, hotspot wizard, Pesapal, SMS, TalkSasa, billing, agent SSH transport, bundled login.html.

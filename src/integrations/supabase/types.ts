@@ -16,8 +16,11 @@ export type Database = {
     Tables: {
       app_settings: {
         Row: {
+          ai_provider: string
           business_name: string | null
           default_currency: string | null
+          gemini_api_key: string | null
+          gemini_model: string
           pesapal_callback_url: string | null
           pesapal_consumer_key: string | null
           pesapal_consumer_secret: string | null
@@ -33,8 +36,11 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          ai_provider?: string
           business_name?: string | null
           default_currency?: string | null
+          gemini_api_key?: string | null
+          gemini_model?: string
           pesapal_callback_url?: string | null
           pesapal_consumer_key?: string | null
           pesapal_consumer_secret?: string | null
@@ -50,8 +56,11 @@ export type Database = {
           user_id: string
         }
         Update: {
+          ai_provider?: string
           business_name?: string | null
           default_currency?: string | null
+          gemini_api_key?: string | null
+          gemini_model?: string
           pesapal_callback_url?: string | null
           pesapal_consumer_key?: string | null
           pesapal_consumer_secret?: string | null

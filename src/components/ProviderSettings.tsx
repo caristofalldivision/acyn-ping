@@ -10,9 +10,27 @@ export const ProviderSettings = () => {
     business_name: "", pesapal_env: "sandbox", pesapal_consumer_key: "", pesapal_consumer_secret: "", pesapal_ipn_id: "",
     talksasa_api_key: "", talksasa_sender_id: "TalkSasa",
     sms_on_payment: true, sms_on_expiry_warn: true, sms_on_expiry: true,
+    ai_provider: "lovable", gemini_api_key: "", gemini_model: "gemini-2.5-pro",
   });
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const testKey = async () => {
+    if (!s.gemini_api_key) { toast({ title: "Enter a key first", variant: "destructive" }); return; }
+    setTesting(true); setTestResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-test-key", {
+        body: { apiKey: s.gemini_api_key, model: s.gemini_model },
+      });
+      if (error) throw error;
+      if (data?.ok) setTestResult(`✓ Key works (${data.model}, ${data.latency_ms}ms)`);
+      else setTestResult(`✗ ${data?.error || "Key rejected by Google"}`);
+    } catch (e: any) {
+      setTestResult(`✗ ${e.message || "Test failed"}`);
+    } finally { setTesting(false); }
+  };
 
   useEffect(() => {
     (async () => {
@@ -41,6 +59,37 @@ export const ProviderSettings = () => {
         <label className="block"><span className="text-xs text-muted-foreground mb-1 block">Business name (shown on receipts & SMS)</span>
           <input value={s.business_name || ""} onChange={e => setS({ ...s, business_name: e.target.value })} className={inp} placeholder="ACYN ISP" /></label>
       </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold">AI Model</h2>
+        <p className="text-[11px] text-muted-foreground">
+          Default uses Lovable AI (no setup). Switch to your own Google Gemini key for direct billing and more control. Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="text-primary underline">aistudio.google.com/apikey</a>.
+        </p>
+        <label className="block"><span className="text-xs text-muted-foreground mb-1 block">Provider</span>
+          <select value={s.ai_provider || "lovable"} onChange={e => setS({ ...s, ai_provider: e.target.value })} className={inp}>
+            <option value="lovable">Lovable AI (default)</option>
+            <option value="gemini">My Google Gemini key</option>
+          </select></label>
+        {s.ai_provider === "gemini" && (
+          <>
+            <label className="block"><span className="text-xs text-muted-foreground mb-1 block">Gemini API Key</span>
+              <input type="password" value={s.gemini_api_key || ""} onChange={e => setS({ ...s, gemini_api_key: e.target.value })} className={inp} placeholder="AIza..." /></label>
+            <label className="block"><span className="text-xs text-muted-foreground mb-1 block">Model</span>
+              <select value={s.gemini_model || "gemini-2.5-pro"} onChange={e => setS({ ...s, gemini_model: e.target.value })} className={inp}>
+                <option value="gemini-2.5-pro">gemini-2.5-pro (best reasoning, recommended for router config)</option>
+                <option value="gemini-2.5-flash">gemini-2.5-flash (fast, cheap)</option>
+                <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (cheapest)</option>
+              </select></label>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={testKey} disabled={testing}>
+                {testing ? "Testing…" : "Test key"}
+              </Button>
+              {testResult && <span className={`text-xs ${testResult.startsWith("✓") ? "text-green-500" : "text-destructive"}`}>{testResult}</span>}
+            </div>
+          </>
+        )}
+      </section>
+
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold">Pesapal (M-Pesa STK + cards)</h2>
