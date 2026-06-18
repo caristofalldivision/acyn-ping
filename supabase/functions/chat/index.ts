@@ -1060,7 +1060,8 @@ Remember: You're not just answering questions, you're a strategic partner helpin
       }
 
       const finalData = await finalResponse.json();
-      const reply = finalData.choices[0].message.content;
+      let reply = finalData.choices[0].message.content;
+      reply = await lintAndMaybeFix(reply, callWithFallback);
 
       // Trigger inline learning (fire-and-forget)
       if (userId) {
@@ -1074,7 +1075,8 @@ Remember: You're not just answering questions, you're a strategic partner helpin
     }
 
     // No tools called, return direct response
-    const reply = assistantMessage.content;
+    let reply = assistantMessage.content;
+    reply = await lintAndMaybeFix(reply, callWithFallback);
 
     // Trigger inline learning (fire-and-forget)
     if (userId) {
@@ -1085,6 +1087,7 @@ Remember: You're not just answering questions, you're a strategic partner helpin
       JSON.stringify({ reply }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
   } catch (error) {
     console.error("Error in chat function:", error);
     return new Response(
