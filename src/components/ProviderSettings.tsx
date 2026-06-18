@@ -10,9 +10,27 @@ export const ProviderSettings = () => {
     business_name: "", pesapal_env: "sandbox", pesapal_consumer_key: "", pesapal_consumer_secret: "", pesapal_ipn_id: "",
     talksasa_api_key: "", talksasa_sender_id: "TalkSasa",
     sms_on_payment: true, sms_on_expiry_warn: true, sms_on_expiry: true,
+    ai_provider: "lovable", gemini_api_key: "", gemini_model: "gemini-2.5-pro",
   });
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const testKey = async () => {
+    if (!s.gemini_api_key) { toast({ title: "Enter a key first", variant: "destructive" }); return; }
+    setTesting(true); setTestResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-test-key", {
+        body: { apiKey: s.gemini_api_key, model: s.gemini_model },
+      });
+      if (error) throw error;
+      if (data?.ok) setTestResult(`✓ Key works (${data.model}, ${data.latency_ms}ms)`);
+      else setTestResult(`✗ ${data?.error || "Key rejected by Google"}`);
+    } catch (e: any) {
+      setTestResult(`✗ ${e.message || "Test failed"}`);
+    } finally { setTesting(false); }
+  };
 
   useEffect(() => {
     (async () => {
