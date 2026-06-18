@@ -7,7 +7,47 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+
+// Find ```routeros / ```rsc / ```mikrotik fenced blocks (or generic ``` blocks
+// that look like RouterOS) and run them through the linter. If lint errors are
+// found, ask the model once to repair them and splice the corrected block back
+// into the reply. Silent self-healing — user only sees the clean version.
+async function lintAndMaybeFix(
+  reply: string | null,
+  callWithFallback: (withTools: boolean, extras: any[]) => Promise<Response>,
+): Promise<string | null> {
+  if (!reply || typeof reply !== "string") return reply;
+  const fence = /```(routeros|rsc|ros|mikrotik)?\n([\s\S]*?)```/gi;
+  let out = reply;
+  const matches = [...reply.matchAll(fence)];
+  for (const m of matches) {
+    const lang = (m[1] || "").toLowerCase();
+    const body = m[2] || "";
+    const looksRos = lang || /^\s*[\/:]/m.test(body);
+    if (!looksRos) continue;
+    const lint = lintRouterOSScript(body);
+    if (lint.ok) continue;
+    try {
+      const fixReq = await callWithFallback(false, [
+        { role: "system", content: "You produced a RouterOS script with errors. Return ONLY a corrected fenced ```routeros block. No prose. Fix every listed error." },
+        { role: "user", content: `Original:\n\`\`\`routeros\n${body}\n\`\`\`\n\nErrors:\n${lint.errors.map(e => "- " + e).join("\n")}\n\nWarnings:\n${lint.warnings.map(w => "- " + w).join("\n")}` },
+      ]);
+      const data = await fixReq.json().catch(() => null);
+      const fixed = data?.choices?.[0]?.message?.content;
+      const fm = fixed && /```(?:routeros|rsc|ros|mikrotik)?\n([\s\S]*?)```/i.exec(fixed);
+      if (fm) {
+        const recheck = lintRouterOSScript(fm[1]);
+        if (recheck.ok) out = out.replace(m[0], "```routeros\n" + recheck.normalized.trimEnd() + "\n```");
+      }
+    } catch (e) {
+      console.warn("lint repair failed:", e);
+    }
+  }
+  return out;
+}
+
 // Tool definitions for AI
+
 const tools = [
   {
     type: "function",
