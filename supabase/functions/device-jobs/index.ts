@@ -152,7 +152,8 @@ Deno.serve(async (req) => {
       const { data: ag } = await admin.from("device_agents")
         .select("status, last_seen_at").eq("id", device.agent_id).maybeSingle();
       const lastSeenMs = ag?.last_seen_at ? Date.now() - new Date(ag.last_seen_at).getTime() : Infinity;
-      if (!ag || ag.status !== "online" || lastSeenMs > 60_000) {
+      // Agent polls every 5s. Treat as online if it polled within 20s under any non-pending status.
+      if (!ag || ag.status === "pending" || lastSeenMs > 20_000) {
         warning = "Agent appears offline. Start it on your machine with `ping-agent run` (or re-run the installer). The job will run automatically once the agent reconnects.";
       }
 
