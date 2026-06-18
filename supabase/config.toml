@@ -41,3 +41,7 @@ verify_jwt = false
 
 [functions.captive-portal-pay]
 verify_jwt = false
+
+[functions.ai-test-key]
+verify_jwt = false
+
