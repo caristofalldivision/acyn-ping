@@ -940,56 +940,75 @@ ${JSON.stringify(topology, null, 2)}
 Remember: You're not just answering questions, you're a strategic partner helping ${userName} achieve their goals. You have memory across all conversations and can reference past discussions.`;
 
     // Model selection: Flash is fast & reliable as primary; Flash-Lite as fallback.
-    // Pro only when the user explicitly asks for "deep" analysis.
+    // Pro + reasoning when the user asks for "deep" analysis OR the message is a network-config task.
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
-    const wantsDeep = /\b(deep|in detail|detailed plan|comprehensive|deep dive)\b/i.test(String(lastUserMsg));
-    const PRIMARY_MODEL = wantsDeep ? "google/gemini-2.5-pro" : "google/gemini-2.5-flash";
-    const FALLBACK_MODEL = "google/gemini-2.5-flash-lite";
+    const lastText = String(lastUserMsg);
+    const wantsDeep = /\b(deep|in detail|detailed plan|comprehensive|deep dive)\b/i.test(lastText);
+    const isConfigTask = /\b(mikrotik|routeros|pppoe|hotspot|firewall|nat|bridge|vlan|script|capsman|wireguard|ospf|bgp|radius)\b/i.test(lastText);
+    const useReasoning = wantsDeep || isConfigTask;
+    const PRIMARY_LOVABLE_MODEL = useReasoning ? "google/gemini-2.5-pro" : "google/gemini-2.5-flash";
+    const FALLBACK_LOVABLE_MODEL = "google/gemini-2.5-flash-lite";
 
-    async function callGateway(model: string, withTools: boolean, extraMessages: any[] = []) {
+    // Device-aware RAG: pull known device facts and previously-approved snippets so
+    // the model writes scripts grounded in the user's actual hardware.
+    let deviceContext = "";
+    if (userId && isConfigTask) {
+      const [{ data: devs }, { data: snippets }] = await Promise.all([
+        supabase.from("devices").select("name, vendor, model, routeros_version, host").eq("user_id", userId).limit(5),
+        supabase.from("saved_scripts").select("title, content, vendor").eq("user_id", userId).order("created_at", { ascending: false }).limit(5),
+      ]);
+      const devLines = (devs || []).map((d: any) =>
+        `- ${d.name} (${d.vendor}${d.model ? " " + d.model : ""}${d.routeros_version ? ", RouterOS " + d.routeros_version : ""}${d.host ? ", host " + d.host : ""})`
+      ).join("\n");
+      const snipLines = (snippets || []).filter((s: any) => (s.vendor || "").toLowerCase() === "mikrotik" || !s.vendor)
+        .slice(0, 3)
+        .map((s: any) => `### ${s.title}\n${String(s.content || "").slice(0, 600)}`).join("\n\n");
+      deviceContext = `\n\nDEVICE CONTEXT (use these facts; do NOT invent interfaces/versions):\n${devLines || "- (no registered devices)"}\n\n${snipLines ? "KNOWN-GOOD SNIPPETS (prefer this style):\n" + snipLines + "\n" : ""}\n\nROUTEROS SCRIPT RULES (mandatory):\n- Never include /system reset-configuration or /system backup — the user runs those manually.\n- Wrap risky commands in :do {...} on-error={...} so a single failure does not abort.\n- Use \\\" to escape double quotes inside strings and \\$ for literal dollar signs.\n- Prefer named comments on add lines so re-runs are idempotent: add ... comment="ping-managed".`;
+    }
+    const enrichedSystemPrompt = systemPrompt + deviceContext;
+
+    async function chat(withTools: boolean, extras: any[] = []) {
+      const msgs = [
+        { role: "system", content: enrichedSystemPrompt },
+        ...messages,
+        ...extras,
+      ];
       const t0 = Date.now();
-      const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: systemPrompt },
-            ...messages,
-            ...extraMessages,
-          ],
-          ...(withTools ? { tools, tool_choice: "auto" } : {}),
-        }),
+      let r = await callAI({
+        userId,
+        messages: msgs,
+        lovableModel: PRIMARY_LOVABLE_MODEL,
+        reasoning: useReasoning,
+        tools: withTools ? tools : undefined,
+        toolChoice: withTools ? "auto" : "none",
       });
-      console.log(`[ai] model=${model} status=${r.status} latency=${Date.now() - t0}ms`);
+      console.log(`[ai] provider=${r.provider} model=${r.model} status=${r.status} latency=${Date.now() - t0}ms`);
+      // Lovable-only fallback to flash-lite on 429/5xx
+      if (!r.ok && r.provider === "lovable" && (r.status === 429 || r.status >= 500)) {
+        console.warn(`primary returned ${r.status}, falling back to ${FALLBACK_LOVABLE_MODEL}`);
+        r = await callAI({
+          userId,
+          messages: msgs,
+          lovableModel: FALLBACK_LOVABLE_MODEL,
+          tools: withTools ? tools : undefined,
+          toolChoice: withTools ? "auto" : "none",
+        });
+      }
       return r;
     }
 
-    async function callWithFallback(withTools: boolean, extras: any[] = []) {
-      // Try primary, retry once on 5xx, fall back to flash-lite on 429/5xx
-      let r: Response;
-      try {
-        r = await callGateway(PRIMARY_MODEL, withTools, extras);
-      } catch (e) {
-        console.warn("primary network error, falling back:", e);
-        r = await callGateway(FALLBACK_MODEL, withTools, extras);
-        return r;
-      }
-      if (r.status === 429 || r.status >= 500) {
-        console.warn(`primary returned ${r.status}, falling back to ${FALLBACK_MODEL}`);
-        try {
-          r = await callGateway(FALLBACK_MODEL, withTools, extras);
-        } catch (e) {
-          console.error("fallback network error:", e);
-        }
-      }
-      return r;
-    }
+    // OpenAI-style Response shim so the rest of the function keeps working.
+    const callWithFallback = async (withTools: boolean, extras: any[] = []) => {
+      const r = await chat(withTools, extras);
+      return new Response(JSON.stringify(r.body ?? { error: r.errorText }), {
+        status: r.ok ? 200 : r.status,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
 
     let response = await callWithFallback(true);
+
+
 
     if (!response.ok) {
       if (response.status === 402) {
