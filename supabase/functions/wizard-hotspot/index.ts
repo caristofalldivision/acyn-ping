@@ -31,6 +31,7 @@ interface Params {
   voucher_user_profile: string;
   rate_limit: string;
   session_timeout: string;
+  wan_interface?: string;
 }
 
 // Escape a string so it survives RouterOS `/file add contents="..."` parsing.
