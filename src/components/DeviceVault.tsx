@@ -91,6 +91,7 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
 
   if (showAdd) return <AddDevice onBack={() => { setShowAdd(false); load(); }} />;
   if (wizardDevice) return <HotspotWizard device={wizardDevice} onBack={() => setWizardDevice(null)} />;
+  if (scenarioDevice) return <ScenarioBuilder device={scenarioDevice} onBack={() => setScenarioDevice(null)} />;
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
