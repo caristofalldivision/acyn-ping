@@ -183,6 +183,9 @@ export const HotspotWizard = ({ device, onBack }: Props) => {
               <Field label="Hotspot interface (must already exist)">
                 <input value={params.hotspot_interface} onChange={e => setParams(p => ({ ...p, hotspot_interface: e.target.value }))} className={inp} />
               </Field>
+              <Field label="WAN interface for NAT (leave blank to auto-detect from default route / WAN list)">
+                <input value={params.wan_interface} onChange={e => setParams(p => ({ ...p, wan_interface: e.target.value }))} placeholder="e.g. ether1 or pppoe-out1" className={inp} />
+              </Field>
               <div className="grid grid-cols-2 gap-2">
                 <Field label="Network (CIDR)">
                   <input value={params.network} onChange={e => setParams(p => ({ ...p, network: e.target.value }))} className={inp} />
