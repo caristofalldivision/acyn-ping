@@ -1,90 +1,112 @@
-# Plan: Own Gemini Key + Smarter Router AI + Fix False "Agent Offline"
+# MikroTik Scenario Builder + Editable Scripts + Hotspot Fix
 
-Three independent pieces. None of them touch the working pairing, installer, captive portal, hotspot wizard, or agent transport.
-
----
-
-## 1. Bring-your-own Gemini API key (replaces Lovable AI for chat)
-
-**Storage.** Add three columns to `app_settings` (per-user, already RLS-scoped):
-- `ai_provider text default 'lovable'` — `'lovable' | 'gemini'`
-- `gemini_api_key text` — user's key from aistudio.google.com
-- `gemini_model text default 'gemini-2.5-pro'` — `gemini-2.5-pro` | `gemini-2.5-flash` | `gemini-3-pro-preview`
-
-**UI.** In `ProviderSettings.tsx`, add a new "AI Model" section:
-- Provider radio (Lovable default / My Gemini key)
-- Key input (password) + model dropdown + "Test key" button (calls a new lightweight `ai-test-key` edge function that does a 1-token completion against Google's API and returns ok/error).
-- Help link to `aistudio.google.com/apikey`.
-
-**Backend.** Add `supabase/functions/_shared/ai-call.ts` — a single helper `callAI({ userId, messages, model, temperature, tools, json })` that:
-1. Loads `app_settings` for `userId`.
-2. If `ai_provider='gemini'` and key present → POST to `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key=...`, mapping the OpenAI-style messages/tools to Gemini's `contents`/`tools`/`generationConfig` shape (and back).
-3. Otherwise → existing Lovable Gateway path (`ai.gateway.lovable.dev`, `LOVABLE_API_KEY`).
-4. Returns a normalised `{ content, tool_calls, usage }` so callers don't change.
-
-Refactor `chat/index.ts`, `background-learning/index.ts`, `analyze-conversations/index.ts` to use `callAI`. Nothing else changes — same prompts, same tools, same streaming envelope. Streaming for `chat` uses Gemini's `:streamGenerateContent?alt=sse` when provider is gemini.
-
-**Failure behaviour.** If user's Gemini key 401/429s, surface the exact provider error in chat (toast + assistant message) instead of silently falling back, so the user knows to fix billing.
+Three independent workstreams. Nothing touches the agent, pairing, device-jobs polling, or installer.
 
 ---
 
-## 2. Higher-accuracy router configuration (RAG + reasoning + self-check)
+## 1. Why current hotspot clients "connect but have no internet / no portal"
 
-Goal: scripts that run first time on MikroTik with no back-and-forth.
+The `wizard-hotspot` plan creates the hotspot, DHCP, pool, profile, walled garden, and uploads `login.html`, but it is **missing the pieces that make traffic actually flow and the portal intercept work**:
 
-**a. Device-aware context.** Before each chat turn that mentions a device or config, `chat/index.ts` now pulls:
-- `devices` row for any device_id referenced (model, `routeros_version`, last known interfaces) — currently ignored.
-- `saved_scripts` snippets the user has previously approved (top 5 by recency, filtered to vendor=mikrotik).
-- `user_knowledge` + `learned_knowledge` (already pulled) — keep, but rank by keyword overlap with the new message instead of dumping all rows.
+- No `/ip firewall nat add chain=srcnat action=masquerade out-interface-list=WAN` (or detected WAN). Clients get a lease but no NAT → no internet → no captive redirect either (the hotspot redirect only fires on intercepted HTTP, which needs DNS + a reachable upstream).
+- No `/ip dns set servers=… allow-remote-requests=yes`. Without `allow-remote-requests`, the hotspot can't resolve `dns-name` and Android/iOS captive checks fail silently.
+- No `/ip firewall filter` allow rule for the hotspot subnet → input (DNS, hotspot HTTP 80/443/64872/64873).
+- WAN interface is never asked for or auto-detected. Even if the user has a working WAN, masquerade is never created.
+- `html-directory=hotspot` is set, but RouterOS expects the profile's html-directory to exist before files are written. The current order writes files after the profile is created — OK — but if `/flash/hotspot/` doesn't exist on some boards the `/file add name="hotspot/login.html"` silently lands in `/`. Need an explicit `/ip hotspot profile set [find name=…] html-directory-override=tmpfs` fallback, or copy the default `hotspot/` dir first.
 
-These are injected as a compact `<device_facts>` / `<known_good_snippets>` block in the system prompt.
+### Fix
+Add three new steps to the hotspot plan, in this order, between `walled-garden` and `portal-files`:
 
-**b. Reasoning model + thinking budget.** When provider is Gemini and the message looks like a config task (regex on words like `mikrotik|pppoe|hotspot|firewall|nat|bridge|vlan|script`), use `gemini-2.5-pro` with `generationConfig.thinkingConfig.thinkingBudget=4096`. For chit-chat, keep `gemini-2.5-flash`. Same toggle for Lovable path.
+1. **Detect WAN** (read step): `/interface/list/member print where list=WAN` and `/ip route print where dst-address=0.0.0.0/0 active=yes` — pick `gateway-interface`. If user supplied `wan_interface` param, use that.
+2. **NAT masquerade** (write): `/ip firewall nat add chain=srcnat action=masquerade out-interface=<wan> comment="ping-hotspot-nat"`.
+3. **DNS + input allow** (write):
+   - `/ip dns set servers=<dns_servers> allow-remote-requests=yes`
+   - `/ip firewall filter add chain=input action=accept in-interface=<hotspot_iface> protocol=udp dst-port=53 comment="ping-hs-dns"`
+   - `/ip firewall filter add chain=input action=accept in-interface=<hotspot_iface> protocol=tcp dst-port=53,80,443,64872,64873 comment="ping-hs-input"`
+   - place rules before any drop rule using `place-before=[find chain=input action=drop]` with `:do {} on-error={}`.
+4. **Ensure html-directory** (write): `/ip hotspot profile set [find name=<profile>] html-directory=flash/hotspot` and `:do { /file add name="flash/hotspot" type=directory } on-error={}` so uploads always land in the right place.
 
-**c. Structured RouterOS validator.** New `supabase/functions/_shared/ros-lint.ts` — pure-TS lint pass:
-- Reject `/system reset-configuration`, `/system backup`, lines with unescaped `"` / `$`, lines >4096 chars, commands not starting with `/` or `:`.
-- Warn on dangerous patterns (`/ip address remove`, `disable ether1`, etc.) used without a `:do {} on-error={}` wrapper.
-- Returns `{ ok, errors[], warnings[], normalized }`.
-
-The chat tool that emits a script (`generate_mikrotik_script` or equivalent) now runs `ros-lint` before returning. On errors, the function re-prompts the model up to 2x with the lint errors appended — fully internal, user never sees the broken attempt.
-
-**d. Self-check loop on the agent side.** In `agent/main.go` `apply_script` handler: after the SSH/REST `import` finishes, parse the output for `failure:`/`syntax error`/`expected command name` lines; if found, mark job `failed` with the specific line number and a hint, instead of "success" with hidden errors. (Backup/reset are still not touched — the user runs those manually as we set up last round.)
-
-**e. RAG retrieval.** Replace the current "dump all knowledge rows" with a simple but effective scorer: tokenise the user message, score each knowledge/saved-script row by token overlap + recency, keep top N under a 6 KB budget. No embeddings needed yet — keeps it cheap and works with BYO key.
-
----
-
-## 3. Fix "agent online but system says offline"
-
-**Root cause** (confirmed in `device-jobs/index.ts` line 51 and the warning check at line ~155): when the agent polls `/pending` over HTTP, `authAgent` sets `status` to `"registered"` (only `device-agent-bridge` WebSocket sets `"online"`). But the offline warning and the UI badge both compare against `"online"` strictly, so an HTTP-polling agent is *always* flagged offline even while it's actively polling every 5 s.
-
-**Fix.**
-1. `device-jobs/index.ts` `authAgent`: set `status = "online"` on every successful poll (regardless of previous value, except `pending`).
-2. `device-jobs/index.ts` job-enqueue warning: treat agent as online if `status in ('online','registered')` **and** `last_seen_at` within `pollInterval * 3 ≈ 20 s` (was 60 s — too lax, also missed the status mismatch).
-3. `DeviceVault.tsx` status badge: same rule (`online` || (`registered` && last_seen < 20s)) → green; otherwise amber.
-4. Add a tiny `/heartbeat` POST in `device-jobs` and call it from the agent every 10 s even when there are no jobs (it's already polling `/pending` every 5 s, so this is mostly belt-and-braces and gives us a clean `last_seen_at` if pending ever 304s).
-5. On agent shutdown (SIGTERM/SIGINT), send a final `status=offline` so the badge flips immediately instead of waiting 20 s.
-
-No changes to `device-agent-bridge`, pairing, secrets, or the bundled binaries' install flow — but the agent binary itself does get rebuilt and re-bundled under `public/agent/bin/` along with a refreshed `SHA256SUMS`.
+Add corresponding entries to `full_rollback_commands` (remove by comment). New params on the wizard form: `wan_interface` (optional, auto-detect if blank).
 
 ---
 
-## Files touched
+## 2. Editable Saved Scripts (TBD placeholders + drop-in provisioner)
 
-- `src/components/ProviderSettings.tsx` — AI provider section
-- `src/components/DeviceVault.tsx` — relaxed online check
-- `supabase/migrations/<new>.sql` — 3 columns on `app_settings`
-- `supabase/functions/_shared/ai-call.ts` *(new)*
-- `supabase/functions/_shared/ros-lint.ts` *(new)*
-- `supabase/functions/ai-test-key/index.ts` *(new)*
-- `supabase/functions/chat/index.ts` — use `callAI`, device-aware RAG, reasoning toggle, lint+retry
-- `supabase/functions/background-learning/index.ts` — use `callAI`
-- `supabase/functions/analyze-conversations/index.ts` — use `callAI`
-- `supabase/functions/device-jobs/index.ts` — status=online on poll, 20 s threshold, `/heartbeat`
-- `agent/main.go` — heartbeat ticker, shutdown offline, parse RouterOS output for errors
-- `public/agent/bin/*` + `SHA256SUMS` — rebuild
-- `supabase/config.toml` — register `ai-test-key`
+### UI (`src/components/SavedScripts.tsx`)
+- Replace the "Show script" `<pre>` block with an inline editor:
+  - `<Textarea>` (monospace, auto-grow) bound to a local draft.
+  - "Save changes" + "Revert" buttons; on save, `UPDATE saved_scripts SET script_content=…, updated_at=now()`.
+  - Above the editor, render a **Placeholders** panel: regex-scan for `«TBD:label»` or `{{label}}` tokens and render one input per unique token; "Apply" rewrites the draft, replacing all occurrences. This lets the user fill TBDs without hunting through the script.
+- Add a new top-level button **"Import provisioner"** which opens a dialog:
+  - Title, category (default `third-party`), paste area for the raw `.rsc` from Centipid/Splynx/Radius Manager/etc.
+  - Optional `provider` tag (centipid, splynx, mikrowisp, custom).
+  - Inserts a row into `saved_scripts` with `template_id='external_provisioner'`.
+- "Apply to device" button on each script card: opens a device picker, enqueues a `device-jobs` job of kind `apply_script` with the (placeholder-resolved) content. Reuses the existing agent path — nothing new server-side.
 
-## Explicitly NOT touched
+### Backend
+- Migration: add `saved_scripts.updated_at timestamptz default now()` if missing, plus trigger; add `saved_scripts.provider text` and `saved_scripts.placeholders jsonb` (cached parse result).
+- No change to `device-jobs` or the agent.
 
-Pairing, installer scripts, captive portal, hotspot wizard, Pesapal, SMS, TalkSasa, billing, agent SSH transport, bundled login.html.
+---
+
+## 3. Scenario Builder (replaces "Hotspot wizard" tile with a richer picker)
+
+### New component `src/components/ScenarioBuilder.tsx`
+A 2-step flow opened from the device card:
+1. **Pick scenario** — grid of cards. User can combine compatible ones (multi-select where it makes sense).
+2. **Fill params** — only the fields the picked scenarios need.
+3. **Build plan** → calls the matching edge function → reuses the existing review/apply UI (`JobLog`, rollback panel) from `HotspotWizard`.
+
+### Scenarios (each is a small plan builder, same shape as `wizard-hotspot`)
+
+| Scenario | Key params | What it configures |
+|---|---|---|
+| **Full hotspot (M-Pesa + voucher)** | hotspot_iface, network, pool, wan_iface, dns | The fixed plan from §1 — DHCP, hotspot, NAT, DNS, walled garden, portal upload |
+| **Third-party billing provisioner** | wan_iface (ether1 default), provisioner script (from Saved Scripts or paste) | Sets `/ip dhcp-client add interface=<wan> disabled=no`, basic firewall, then runs the user-supplied provisioner verbatim. No portal, no hotspot. |
+| **Bridge only** | bridge_name, port list (multi-select from `/interface print`), vlan-filtering on/off | `/interface bridge add`, `/interface bridge port add` for each port |
+| **Wireless only** | radio (wlan1/wifi1), ssid, band, security (open / wpa2-psk / wpa3-psk), passphrase, country | Detect WiFi stack (`/interface wifi print` for ROS7 wifiwave2 vs `/interface wireless` legacy), create security profile, set ssid, enable |
+| **NAT only (basic gateway)** | wan_iface, lan_iface, lan_network | DHCP client on WAN, address+DHCP server on LAN, masquerade, baseline firewall |
+| **PPPoE client (WAN)** | wan_iface, user, password, service-name | `/interface pppoe-client add`, default route via pppoe-out1, masquerade |
+| **PPPoE server (ISP)** | listen_iface, pool, profile, local_ip | `/ip pool`, `/ppp profile`, `/interface pppoe-server server add` |
+| **RADIUS client (hotspot/PPPoE auth)** | server_ip, secret, services (hotspot/ppp/login) | `/radius add`, enable on selected services, `incoming accept=yes` |
+| **VLAN trunk + access ports** | trunk_iface, vlan list (id+name+access ports) | bridge vlan-filtering, `/interface vlan`, `/interface bridge vlan` tagged/untagged |
+| **DHCP server on existing iface** | iface, network, pool, dns | pool + dhcp-server + network |
+| **Firewall hardening baseline** | wan_iface | input drop !established, fasttrack, block bogons, allow icmp |
+| **WireGuard server** | listen_port, peer pubkeys (paste), allowed-ips | `/interface wireguard add`, peers, address, firewall accept |
+| **Site-to-site IPsec** | remote_ip, psk, local/remote subnets | `/ip ipsec peer/identity/policy` |
+| **Queue / simple QoS** | iface, max-up, max-down, per-client option | `/queue simple` parent + child |
+| **DDNS (MikroTik cloud)** | enable | `/ip cloud set ddns-enabled=yes` |
+| **Backup-to-email schedule** | smtp_user, smtp_pass | `/system scheduler` weekly export+email |
+| **NTP client** | servers | `/system ntp client set` |
+| **User management** | admin user rename, new password | rename `admin`, add operator user, disable defaults |
+
+Compatibility rules (enforced in UI):
+- Full hotspot is exclusive with Third-party provisioner.
+- Bridge-only, Wireless-only, NAT-only, VLAN can be combined.
+- RADIUS attaches to either Full hotspot or PPPoE server if either is also selected.
+
+### Backend
+- One new edge function: `wizard-scenarios/index.ts` (single dispatcher) with one builder per scenario in `_shared/scenarios/*.ts` (`hotspot.ts`, `nat.ts`, `bridge.ts`, `wireless.ts`, `pppoe-client.ts`, `pppoe-server.ts`, `radius.ts`, `vlan.ts`, `dhcp.ts`, `firewall.ts`, `wireguard.ts`, `ipsec.ts`, `qos.ts`, `ddns.ts`, `backup-sched.ts`, `ntp.ts`, `users.ts`, `third-party.ts`).
+- Each builder returns the same `{ steps, full_rollback_commands, ai_notes }` shape `HotspotWizard` already consumes, so the review/apply UI is reused unchanged.
+- All generated scripts run through the existing `ros-lint.ts` before being returned.
+- Existing `wizard-hotspot` function stays as a thin wrapper that calls the new hotspot builder, so the current Hotspot wizard tile keeps working unchanged.
+
+---
+
+## 4. Protected — do not touch
+- `agent/`, `public/agent/`, installer scripts, `device-jobs` polling, `device-agent-bridge`, `device-pair`, `DeviceVault.tsx` status badge.
+- `captive-portal-pay`, `pesapal-*`, `send-sms`, `send-email`, billing, calendar.
+- `chat/index.ts` AI logic, `ai-call.ts`, BYO Gemini settings.
+
+## 5. Files
+
+**New:** `src/components/ScenarioBuilder.tsx`, `supabase/functions/wizard-scenarios/index.ts`, `supabase/functions/_shared/scenarios/*.ts` (one per scenario), migration for `saved_scripts.updated_at/provider/placeholders`.
+
+**Edited:** `src/components/SavedScripts.tsx` (editor + placeholder panel + import provisioner + apply-to-device), `src/components/HotspotWizard.tsx` (add `wan_interface` field), `supabase/functions/wizard-hotspot/index.ts` (NAT + DNS + html-dir steps), `src/components/DeviceVault.tsx` (entry point to Scenario Builder alongside existing Hotspot wizard button), `supabase/config.toml` (register `wizard-scenarios`).
+
+## 6. Acceptance
+- Existing Hotspot wizard run on a fresh router → client gets DHCP, DNS resolves, portal page appears on first HTTP, M-Pesa/voucher login succeeds, browsing works.
+- Saved Scripts: a script containing `«TBD:hotspot_iface»` shows a labeled input; filling it rewrites the body; "Apply" enqueues a job the existing agent runs.
+- Third-party scenario: pasting a Centipid `.rsc` and selecting "Third-party" produces a plan whose last write step is the verbatim provisioner; agent runs it.
+- Bridge / Wireless / NAT / RADIUS / VLAN / PPPoE / WireGuard each build a plan, pass `ros-lint`, and apply without breaking the agent connection.
+- Agent online status, pairing, and chat are unchanged.

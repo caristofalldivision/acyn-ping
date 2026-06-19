@@ -45,3 +45,7 @@ verify_jwt = false
 [functions.ai-test-key]
 verify_jwt = false
 
+[functions.wizard-scenarios]
+verify_jwt = false
+
+

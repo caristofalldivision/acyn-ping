@@ -620,6 +620,8 @@ export type Database = {
           description: string | null
           form_values: Json | null
           id: string
+          placeholders: Json | null
+          provider: string | null
           script_content: string
           template_id: string | null
           title: string
@@ -632,6 +634,8 @@ export type Database = {
           description?: string | null
           form_values?: Json | null
           id?: string
+          placeholders?: Json | null
+          provider?: string | null
           script_content: string
           template_id?: string | null
           title: string
@@ -644,6 +648,8 @@ export type Database = {
           description?: string | null
           form_values?: Json | null
           id?: string
+          placeholders?: Json | null
+          provider?: string | null
           script_content?: string
           template_id?: string | null
           title?: string

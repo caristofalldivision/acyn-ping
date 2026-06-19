@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Router as RouterIcon, Wifi, Trash2, Terminal, Download } from "lucide-react";
+import { ArrowLeft, Plus, Router as RouterIcon, Wifi, Trash2, Terminal, Download, Filter } from "lucide-react";
 import { JobLog } from "./JobLog";
 import { HotspotWizard } from "./HotspotWizard";
+import { ScenarioBuilder } from "./ScenarioBuilder";
 
 interface DeviceVaultProps {
   onBack: () => void;
@@ -29,6 +30,7 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
   const [showAdd, setShowAdd] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [wizardDevice, setWizardDevice] = useState<Device | null>(null);
+  const [scenarioDevice, setScenarioDevice] = useState<Device | null>(null);
   const [agentStatuses, setAgentStatuses] = useState<Record<string, { status: string; last_seen_at: string | null }>>({});
   const { toast } = useToast();
 
@@ -89,6 +91,7 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
 
   if (showAdd) return <AddDevice onBack={() => { setShowAdd(false); load(); }} />;
   if (wizardDevice) return <HotspotWizard device={wizardDevice} onBack={() => setWizardDevice(null)} />;
+  if (scenarioDevice) return <ScenarioBuilder device={scenarioDevice} onBack={() => setScenarioDevice(null)} />;
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
@@ -169,6 +172,13 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
                       setWizardDevice(d);
                     }}>
                     <Wifi className="w-3 h-3" /> Hotspot Wizard
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5"
+                    onClick={() => {
+                      if (!d.agent_id) { toast({ title: "Pair an agent first", variant: "destructive" }); return; }
+                      setScenarioDevice(d);
+                    }}>
+                    <Filter className="w-3 h-3" /> Scenarios
                   </Button>
                   <Button size="sm" variant="ghost" className="h-8 text-xs gap-1.5" disabled>
                     <Terminal className="w-3 h-3" /> Jobs

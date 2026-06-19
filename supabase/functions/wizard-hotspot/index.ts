@@ -31,6 +31,7 @@ interface Params {
   voucher_user_profile: string;
   rate_limit: string;
   session_timeout: string;
+  wan_interface?: string;
 }
 
 // Escape a string so it survives RouterOS `/file add contents="..."` parsing.
@@ -278,44 +279,107 @@ function buildPlan(p: Params, deviceName: string, deviceId: string, backendUrl: 
         rollback_commands: [`/ip hotspot walled-garden remove [find comment="ping-wg"]`],
       },
       {
+        id: "wan-detect",
+        title: "Detect WAN interface",
+        description: p.wan_interface
+          ? `Using supplied WAN interface ${p.wan_interface} for NAT.`
+          : "Read default route to discover the upstream interface for NAT masquerade.",
+        kind: "read",
+        requires_confirm: false,
+        commands: [
+          `/interface list member print where list=WAN`,
+          `/ip route print where dst-address="0.0.0.0/0" active=yes`,
+        ],
+        rollback_commands: [],
+      },
+      {
+        id: "nat",
+        title: "NAT masquerade on WAN",
+        description: p.wan_interface
+          ? `Masquerade outbound traffic via ${p.wan_interface} so hotspot clients reach the internet.`
+          : `Masquerade outbound traffic via the WAN interface list (auto-fallback to first default-route gateway interface) so hotspot clients reach the internet.`,
+        kind: "write",
+        requires_confirm: true,
+        commands: p.wan_interface
+          ? [`:do { /ip firewall nat add chain=srcnat action=masquerade out-interface=${p.wan_interface} comment="ping-hotspot-nat" } on-error={ :log warning "ping: nat add failed" }`]
+          : [
+              `:local wan ""; :do { :set wan [/interface list member find list=WAN]; } on-error={}`,
+              `:do { /ip firewall nat add chain=srcnat action=masquerade out-interface-list=WAN comment="ping-hotspot-nat" } on-error={ /ip firewall nat add chain=srcnat action=masquerade comment="ping-hotspot-nat" }`,
+            ],
+        rollback_commands: [`/ip firewall nat remove [find comment="ping-hotspot-nat"]`],
+      },
+      {
+        id: "dns-firewall",
+        title: "DNS + firewall input for hotspot clients",
+        description: "Enable DNS recursion for clients and accept DNS/HTTP/HTTPS/hotspot ports from the hotspot interface so the captive redirect can fire.",
+        kind: "write",
+        requires_confirm: true,
+        commands: [
+          `/ip dns set servers=${p.dns_servers} allow-remote-requests=yes`,
+          `:do { /ip firewall filter add chain=input action=accept in-interface=${p.hotspot_interface} protocol=udp dst-port=53 comment="ping-hs-dns" place-before=0 } on-error={ /ip firewall filter add chain=input action=accept in-interface=${p.hotspot_interface} protocol=udp dst-port=53 comment="ping-hs-dns" }`,
+          `:do { /ip firewall filter add chain=input action=accept in-interface=${p.hotspot_interface} protocol=tcp dst-port=53,80,443,64872,64873 comment="ping-hs-input" place-before=0 } on-error={ /ip firewall filter add chain=input action=accept in-interface=${p.hotspot_interface} protocol=tcp dst-port=53,80,443,64872,64873 comment="ping-hs-input" }`,
+        ],
+        rollback_commands: [
+          `/ip firewall filter remove [find comment="ping-hs-dns"]`,
+          `/ip firewall filter remove [find comment="ping-hs-input"]`,
+        ],
+      },
+      {
+        id: "html-dir",
+        title: "Ensure html-directory exists",
+        description: "Point the hotspot profile at flash/hotspot and ensure the directory exists so portal files land in the right place.",
+        kind: "write",
+        requires_confirm: true,
+        commands: [
+          `:do { /file add name="flash/${htmlDir}" type=directory } on-error={}`,
+          `/ip hotspot profile set [find name=${p.hotspot_profile_name}] html-directory=flash/${htmlDir}`,
+        ],
+        rollback_commands: [],
+      },
+      {
         id: "portal-files",
         title: "Upload captive portal files",
         description: "Writes login.html + alogin.html to /flash/hotspot/. These render the Pesapal + voucher login page that actually logs users in.",
         kind: "write",
         requires_confirm: true,
         commands: [
-          `:do { /file remove [find name="${htmlDir}/login.html"] } on-error={}`,
-          `:do { /file remove [find name="${htmlDir}/alogin.html"] } on-error={}`,
-          `/file add name="${htmlDir}/login.html" contents="${rosEscape(loginHtml)}"`,
-          `/file add name="${htmlDir}/alogin.html" contents="${rosEscape(aloginHtml)}"`,
+          `:do { /file remove [find name="flash/${htmlDir}/login.html"] } on-error={}`,
+          `:do { /file remove [find name="flash/${htmlDir}/alogin.html"] } on-error={}`,
+          `/file add name="flash/${htmlDir}/login.html" contents="${rosEscape(loginHtml)}"`,
+          `/file add name="flash/${htmlDir}/alogin.html" contents="${rosEscape(aloginHtml)}"`,
         ],
         rollback_commands: [
-          `/file remove [find name="${htmlDir}/login.html"]`,
-          `/file remove [find name="${htmlDir}/alogin.html"]`,
+          `/file remove [find name="flash/${htmlDir}/login.html"]`,
+          `/file remove [find name="flash/${htmlDir}/alogin.html"]`,
         ],
       },
       {
         id: "verify",
         title: "Verify",
-        description: "Read back the created hotspot, profile, walled-garden count, and uploaded files.",
+        description: "Read back the created hotspot, profile, walled-garden count, NAT rule, and uploaded files.",
         kind: "read",
         requires_confirm: false,
         commands: [
           `/ip hotspot print`,
           `/ip hotspot profile print where name=${p.hotspot_profile_name}`,
           `/ip hotspot walled-garden print count-only where comment="ping-wg"`,
+          `/ip firewall nat print where comment="ping-hotspot-nat"`,
+          `/ip dns print`,
           `/file print where name~"${htmlDir}/"`,
         ],
         rollback_commands: [],
       },
     ],
     full_rollback_commands: [
-      `/file remove [find name="${htmlDir}/login.html"]`,
-      `/file remove [find name="${htmlDir}/alogin.html"]`,
+      `/file remove [find name="flash/${htmlDir}/login.html"]`,
+      `/file remove [find name="flash/${htmlDir}/alogin.html"]`,
       `/ip hotspot walled-garden remove [find comment="ping-wg"]`,
       `/ip hotspot remove [find name=ping-hs]`,
       `/ip hotspot user profile remove [find name=${p.voucher_user_profile}]`,
       `/ip hotspot profile remove [find name=${p.hotspot_profile_name}]`,
+      `/ip firewall filter remove [find comment="ping-hs-dns"]`,
+      `/ip firewall filter remove [find comment="ping-hs-input"]`,
+      `/ip firewall nat remove [find comment="ping-hotspot-nat"]`,
       `/ip dhcp-server network remove [find address=${p.network}]`,
       `/ip dhcp-server remove [find name=ping-hs-dhcp]`,
       `/ip pool remove [find name=ping-hs-pool]`,
