@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Router as RouterIcon, Wifi, Trash2, Terminal, Download } from "lucide-react";
+import { ArrowLeft, Plus, Router as RouterIcon, Wifi, Trash2, Terminal, Download, Filter } from "lucide-react";
 import { JobLog } from "./JobLog";
 import { HotspotWizard } from "./HotspotWizard";
+import { ScenarioBuilder } from "./ScenarioBuilder";
 
 interface DeviceVaultProps {
   onBack: () => void;
