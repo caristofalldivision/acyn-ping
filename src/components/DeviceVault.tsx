@@ -173,6 +173,13 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
                     }}>
                     <Wifi className="w-3 h-3" /> Hotspot Wizard
                   </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5"
+                    onClick={() => {
+                      if (!d.agent_id) { toast({ title: "Pair an agent first", variant: "destructive" }); return; }
+                      setScenarioDevice(d);
+                    }}>
+                    <Filter className="w-3 h-3" /> Scenarios
+                  </Button>
                   <Button size="sm" variant="ghost" className="h-8 text-xs gap-1.5" disabled>
                     <Terminal className="w-3 h-3" /> Jobs
                   </Button>
