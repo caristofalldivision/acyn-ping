@@ -9,7 +9,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { lintRouterOS } from "../_shared/ros-lint.ts";
+import { lintRouterOSScript } from "../_shared/ros-lint.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
