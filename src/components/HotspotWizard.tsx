@@ -46,6 +46,7 @@ const defaults = {
   voucher_user_profile: "1hr-5M",
   rate_limit: "5M/5M",
   session_timeout: "1h",
+  wan_interface: "",
 };
 
 export const HotspotWizard = ({ device, onBack }: Props) => {
