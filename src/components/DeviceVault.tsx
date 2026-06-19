@@ -30,6 +30,7 @@ export const DeviceVault = ({ onBack }: DeviceVaultProps) => {
   const [showAdd, setShowAdd] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [wizardDevice, setWizardDevice] = useState<Device | null>(null);
+  const [scenarioDevice, setScenarioDevice] = useState<Device | null>(null);
   const [agentStatuses, setAgentStatuses] = useState<Record<string, { status: string; last_seen_at: string | null }>>({});
   const { toast } = useToast();
 
