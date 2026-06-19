@@ -497,7 +497,7 @@ Deno.serve(async (req) => {
     const fullScript = plan.steps.flatMap(s => s.commands).join("\n");
     let lintErrors: string[] = [];
     try {
-      const r: any = lintRouterOS(fullScript);
+      const r: any = lintRouterOSScript(fullScript);
       lintErrors = (r?.errors || []).map((e: any) => typeof e === "string" ? e : (e?.message || JSON.stringify(e)));
     } catch (_) { /* lint is advisory */ }
 
