@@ -27,6 +27,13 @@ interface TemplateField {
   type: "text" | "select" | "textarea";
   options?: { value: string; label: string }[];
   required?: boolean;
+  // Field becomes required only when this predicate over the current form
+  // values returns true (e.g. PPPoE credentials only matter if WAN type
+  // is actually "pppoe"). Evaluated fresh on every render/submit.
+  requiredIf?: (values: Record<string, string>) => boolean;
+  // Masks the input (e.g. PPPoE password, RADIUS shared secret, PSK) so
+  // it isn't shown in plaintext on screen.
+  sensitive?: boolean;
   helpText?: string;
 }
 
@@ -69,7 +76,7 @@ const templates: Template[] = [
         { value: "no", label: "No - MikroTik local users (simpler)" },
         { value: "yes", label: "Yes - FreeRADIUS + DaloRADIUS on VPS" },
       ]},
-      { id: "radius_ip", label: "RADIUS Server IP (if using RADIUS)", placeholder: "e.g., VPS IP", type: "text" },
+      { id: "radius_ip", label: "RADIUS Server IP (if using RADIUS)", placeholder: "e.g., VPS IP", type: "text", requiredIf: (v) => v.radius === "yes" },
       { id: "dns", label: "DNS Servers", placeholder: "e.g., 8.8.8.8, 1.1.1.1", type: "text" },
     ],
     promptBuilder: (v) => `I need a COMPLETE ISP hotspot business setup on my MikroTik ${v.model} running RouterOS ${v.routeros_version}. Give me EVERYTHING step by step - I should be able to start selling internet access after following your guide.
@@ -125,13 +132,15 @@ Give me copy-paste ready commands for each step. Start with Step 1 and wait for 
         { value: "daloradius", label: "FreeRADIUS + DaloRADIUS (recommended)" },
         { value: "splynx", label: "Splynx (commercial ISP platform)" },
       ], required: true },
-      { id: "radius_ip", label: "Billing Server IP", placeholder: "e.g., VPS public IP", type: "text" },
+      { id: "radius_ip", label: "Billing Server IP", placeholder: "e.g., VPS public IP", type: "text", requiredIf: (v) => !!v.radius && v.radius !== "local" },
       { id: "queue_type", label: "Queue Method", type: "select", placeholder: "", options: [
         { value: "simple", label: "Simple Queues (easier)" },
         { value: "pcq", label: "Queue Tree + PCQ (better for many users)" },
       ]},
     ],
-    promptBuilder: (v) => `Set up a COMPLETE PPPoE ISP business on my MikroTik ${v.model} running RouterOS ${v.routeros_version}. I need everything to run an ISP.
+    promptBuilder: (v) => {
+      const queueType = v.queue_type || "pcq";
+      return `Set up a COMPLETE PPPoE ISP business on my MikroTik ${v.model} running RouterOS ${v.routeros_version}. I need everything to run an ISP.
 
 Details:
 - WAN: ${v.wan_interface}
@@ -140,7 +149,7 @@ Details:
 - Server local IP: ${v.local_ip}
 - ISP name: ${v.isp_name}
 - Billing: ${v.radius}${v.radius_ip ? ` at ${v.radius_ip}` : ""}
-- Queue method: ${v.queue_type || "pcq"}
+- Queue method: ${queueType}
 
 Speed plans:
 ${v.plans}
@@ -150,14 +159,15 @@ Configure EVERYTHING:
 2. PPP profiles for EACH plan with exact rate limits
 3. IP pool configuration
 4. ${v.radius !== "local" ? `RADIUS client on MikroTik + complete ${v.radius === "daloradius" ? "FreeRADIUS + DaloRADIUS" : "Splynx"} server setup` : "Sample PPP secrets for testing"}
-5. ${v.queue_type === "pcq" ? "Queue tree with PCQ for fair bandwidth" : "Simple queues per PPP profile"}
+5. ${queueType === "pcq" ? "Queue tree with PCQ for fair bandwidth" : "Simple queues per PPP profile"}
 6. NAT masquerade for internet
 7. Firewall rules (protect router, allow PPPoE)
 8. DNS configuration
 9. Monitoring: active connections, bandwidth per user, disconnecting users
 10. Accounting and session management
 
-Step by step please. Start with Step 1.`
+Step by step please. Start with Step 1.`;
+    }
   },
 
   // === NEW: RADIUS Server + Billing ===
@@ -177,7 +187,7 @@ Step by step please. Start with Step 1.`
       { id: "vps_ip", label: "VPS Public IP", placeholder: "e.g., 185.xxx.xxx.xxx", type: "text", required: true },
       { id: "domain", label: "Domain for Web Panel (optional)", placeholder: "e.g., billing.myisp.com", type: "text" },
       { id: "nas_ip", label: "MikroTik NAS IP", placeholder: "e.g., your MikroTik public IP", type: "text", required: true, helpText: "The IP your MikroTik uses to reach this VPS" },
-      { id: "radius_secret", label: "RADIUS Shared Secret", placeholder: "e.g., MySecretKey123", type: "text", required: true, helpText: "A password shared between MikroTik and RADIUS server" },
+      { id: "radius_secret", label: "RADIUS Shared Secret", placeholder: "e.g., MySecretKey123", type: "text", required: true, sensitive: true, helpText: "A password shared between MikroTik and RADIUS server" },
       { id: "service_type", label: "Service Type", type: "select", placeholder: "", options: [
         { value: "hotspot", label: "Hotspot users" },
         { value: "pppoe", label: "PPPoE users" },
@@ -276,21 +286,23 @@ Step by step. Start with Step 1.`
       { id: "lan_iface", label: "LAN Interface", placeholder: "e.g., eth1 or switch0", type: "text", required: true },
       { id: "lan_subnet", label: "LAN Subnet", placeholder: "e.g., 192.168.1.0/24", type: "text", required: true },
       { id: "lan_gw", label: "LAN Gateway IP", placeholder: "e.g., 192.168.1.1", type: "text", required: true },
-      { id: "pppoe_user", label: "PPPoE User (if PPPoE)", placeholder: "e.g., user@isp", type: "text" },
-      { id: "pppoe_pass", label: "PPPoE Password (if PPPoE)", placeholder: "", type: "text" },
+      { id: "pppoe_user", label: "PPPoE User (if PPPoE)", placeholder: "e.g., user@isp", type: "text", requiredIf: (v) => v.wan_type === "pppoe" },
+      { id: "pppoe_pass", label: "PPPoE Password (if PPPoE)", placeholder: "", type: "text", requiredIf: (v) => v.wan_type === "pppoe", sensitive: true },
       { id: "port_forwards", label: "Port Forwards (optional)", placeholder: "e.g.,\n8080 tcp -> 192.168.1.10:80\n22 tcp -> 192.168.1.20:22", type: "textarea" },
       { id: "hwoffload", label: "Enable Hardware Offload?", type: "select", placeholder: "", options: [
         { value: "yes", label: "Yes (faster, breaks some QoS)" },
         { value: "no", label: "No (keep all features)" },
       ]},
     ],
-    promptBuilder: (v) => `Configure my Ubiquiti ${v.model} (EdgeOS ${v.edgeos_version}) for home/office use.
+    promptBuilder: (v) => {
+      const hwOffload = v.hwoffload || "yes";
+      return `Configure my Ubiquiti ${v.model} (EdgeOS ${v.edgeos_version}) for home/office use.
 
 WAN: ${v.wan_type} on ${v.wan_iface}
 LAN: ${v.lan_iface}, subnet ${v.lan_subnet}, gateway ${v.lan_gw}
 ${v.wan_type === "pppoe" ? `PPPoE: ${v.pppoe_user} / ${v.pppoe_pass}` : ""}
 ${v.port_forwards ? `Port forwards:\n${v.port_forwards}` : ""}
-Hardware offload: ${v.hwoffload || "yes"}
+Hardware offload: ${hwOffload}
 
 Give me the FULL EdgeOS configure-mode commands in ONE bash code block:
 - WAN setup (${v.wan_type})
@@ -298,9 +310,10 @@ Give me the FULL EdgeOS configure-mode commands in ONE bash code block:
 - NAT masquerade
 - Firewall rule sets WAN_IN, WAN_LOCAL (default drop, allow established/related, ICMP)
 - ${v.port_forwards ? "Destination NAT for each port forward + matching firewall accept" : "No port forwards"}
-- ${v.hwoffload === "yes" ? "Enable HW offload (hwnat, ipsec, ipv4)" : "Skip HW offload"}
+- ${hwOffload === "yes" ? "Enable HW offload (hwnat, ipsec, ipv4)" : "Skip HW offload"}
 - Final: commit ; save ; exit
-- Verification commands at the end (show interfaces, show dhcp leases, ping)`
+- Verification commands at the end (show interfaces, show dhcp leases, ping)`;
+    }
   },
   {
     id: "unifi-switch-vlan",
@@ -325,7 +338,9 @@ Give me the FULL EdgeOS configure-mode commands in ONE bash code block:
         { value: "edgerouter", label: "EdgeRouter" },
       ]},
     ],
-    promptBuilder: (v) => `Configure VLANs on my UniFi ${v.switch_model} via ${v.controller_type === "self" ? "self-hosted" : v.controller_type === "ui" ? "UI.com cloud" : "CloudKey/UDM"} controller.
+    promptBuilder: (v) => {
+      const gatewayDevice = v.gateway_device || "udm";
+      return `Configure VLANs on my UniFi ${v.switch_model} via ${v.controller_type === "self" ? "self-hosted" : v.controller_type === "ui" ? "UI.com cloud" : "CloudKey/UDM"} controller.
 
 VLANs:
 ${v.vlans}
@@ -333,14 +348,15 @@ ${v.vlans}
 Trunk ports: ${v.trunk_ports}
 Access port assignments:
 ${v.access_ports}
-Gateway: ${v.gateway_device || "udm"}
+Gateway: ${gatewayDevice}
 
 Give me:
 1. EXACT controller GUI clickpath to create each VLAN as a Network (Settings > Networks > Create New).
 2. EXACT clickpath to create Switch Port Profiles (Settings > Profiles > Switch Ports) — one trunk profile + one access profile per VLAN.
 3. EXACT clickpath to apply profiles to ports (Devices > [switch] > Ports > [port] > Profile).
-4. ${v.gateway_device === "udm" ? "config.gateway.json snippet for any DHCP options or per-VLAN firewall rules the GUI doesn't expose." : v.gateway_device === "mikrotik" ? "Matching MikroTik bridge VLAN filtering config so trunk ports work end-to-end." : "Matching EdgeRouter VLAN sub-interface config so trunk ports work end-to-end."}
-5. Verification: how to check each port's effective VLAN in the controller and via SSH (\`info\` command).`
+4. ${gatewayDevice === "udm" ? "config.gateway.json snippet for any DHCP options or per-VLAN firewall rules the GUI doesn't expose." : gatewayDevice === "mikrotik" ? "Matching MikroTik bridge VLAN filtering config so trunk ports work end-to-end." : "Matching EdgeRouter VLAN sub-interface config so trunk ports work end-to-end."}
+5. Verification: how to check each port's effective VLAN in the controller and via SSH (\`info\` command).`;
+    }
   },
   {
     id: "unifi-guest-hotspot",
@@ -400,7 +416,7 @@ EXACT controller GUI steps:
         { value: "auto-ipsec", label: "Auto IPsec (UniFi-to-UniFi, easiest)" },
         { value: "manual-ipsec", label: "Manual IPsec (mixed-vendor)" },
       ], required: true },
-      { id: "psk", label: "Pre-Shared Key (Manual IPsec only)", placeholder: "e.g., AStrongPSK!2024", type: "text" },
+      { id: "psk", label: "Pre-Shared Key (Manual IPsec only)", placeholder: "e.g., AStrongPSK!2024", type: "text", requiredIf: (v) => v.vpn_type === "manual-ipsec", sensitive: true },
     ],
     promptBuilder: (v) => `Set up a Site-to-Site VPN between my UniFi sites.
 
@@ -443,7 +459,9 @@ ${v.vpn_type === "auto-ipsec"
         { value: "paypal", label: "PayPal" },
       ]},
     ],
-    promptBuilder: (v) => `Generate a COMPLETE MikroTik hotspot configuration for RouterOS ${v.routeros_version} on ${v.model}.
+    promptBuilder: (v) => {
+      const payment = v.payment || "none";
+      return `Generate a COMPLETE MikroTik hotspot configuration for RouterOS ${v.routeros_version} on ${v.model}.
 
 Details:
 - Hotspot interface: ${v.hotspot_interface}
@@ -451,9 +469,10 @@ Details:
 - Network: ${v.network}, Gateway: ${v.gateway}
 - DNS: ${v.dns || "8.8.8.8, 1.1.1.1"}
 - Plans: ${v.plans || "Basic 2M/1M, Standard 5M/2M, Premium 10M/5M"}
-- Payment: ${v.payment || "none"}
+- Payment: ${payment}
 
-Include: IP pool, DHCP, hotspot server, profiles with rate limits, user profiles, walled garden${v.payment !== "none" ? `, ${v.payment} payment integration` : ""}, NAT, DNS, firewall, verification commands. Step by step, start with Step 1.`
+Include: IP pool, DHCP, hotspot server, profiles with rate limits, user profiles, walled garden${payment !== "none" ? `, ${payment} payment integration` : ""}, NAT, DNS, firewall, verification commands. Step by step, start with Step 1.`;
+    }
   },
   {
     id: "mikrotik-pppoe",
@@ -476,17 +495,20 @@ Include: IP pool, DHCP, hotspot server, profiles with rate limits, user profiles
         { value: "daloradius", label: "Yes - DaloRADIUS" },
         { value: "splynx", label: "Yes - Splynx" },
       ]},
-      { id: "radius_ip", label: "RADIUS Server IP", placeholder: "e.g., 192.168.1.100 or VPS IP", type: "text" },
+      { id: "radius_ip", label: "RADIUS Server IP", placeholder: "e.g., 192.168.1.100 or VPS IP", type: "text", requiredIf: (v) => !!v.radius && v.radius !== "no" },
     ],
-    promptBuilder: (v) => `Generate a COMPLETE MikroTik PPPoE server configuration for RouterOS ${v.routeros_version} on ${v.model}.
+    promptBuilder: (v) => {
+      const radius = v.radius || "no";
+      return `Generate a COMPLETE MikroTik PPPoE server configuration for RouterOS ${v.routeros_version} on ${v.model}.
 
 Details:
 - PPPoE interface: ${v.pppoe_interface}, WAN: ${v.wan_interface}
 - Client IP pool: ${v.pool_range}, Local: ${v.local_ip}
 - Plans: ${v.plans || "5M/2M, 10M/5M, 20M/10M"}
-- RADIUS: ${v.radius || "no"}${v.radius_ip ? `, IP: ${v.radius_ip}` : ""}
+- RADIUS: ${radius}${v.radius_ip ? `, IP: ${v.radius_ip}` : ""}
 
-Include: PPPoE server, PPP profiles with rate limits, IP pool, ${v.radius !== "no" ? "RADIUS client + server setup, " : "sample PPP secrets, "}NAT, firewall, queue setup, monitoring. Step by step, start with Step 1.`
+Include: PPPoE server, PPP profiles with rate limits, IP pool, ${radius !== "no" ? "RADIUS client + server setup, " : "sample PPP secrets, "}NAT, firewall, queue setup, monitoring. Step by step, start with Step 1.`;
+    }
   },
   {
     id: "cisco-vlan",
@@ -548,13 +570,16 @@ Include: VLAN creation, port assignments, trunk config, port security, ${v.routi
         { value: "wireguard", label: "WireGuard VPN" },
       ]},
     ],
-    promptBuilder: (v) => `Set up my Contabo VPS (${v.os}) at ${v.vps_ip} for ${v.purpose}.
+    promptBuilder: (v) => {
+      const tunnel = v.tunnel || "none";
+      return `Set up my Contabo VPS (${v.os}) at ${v.vps_ip} for ${v.purpose}.
 
 Domain: ${v.domain || "no domain"}
 MikroTik: ${v.mikrotik_ip || "not specified"}
-Tunnel: ${v.tunnel || "none"}
+Tunnel: ${tunnel}
 
-Start with server hardening, then install and configure everything needed for ${v.purpose}. ${v.tunnel !== "none" ? `Include ${v.tunnel} tunnel setup on BOTH VPS and MikroTik sides.` : ""} Step by step, start with Step 1.`
+Start with server hardening, then install and configure everything needed for ${v.purpose}. ${tunnel !== "none" ? `Include ${tunnel} tunnel setup on BOTH VPS and MikroTik sides.` : ""} Step by step, start with Step 1.`;
+    }
   },
   {
     id: "mikrotik-firewall",
@@ -574,7 +599,7 @@ Start with server hardening, then install and configure everything needed for ${
         { value: "webserver", label: "Web server (80/443)" },
         { value: "custom", label: "Custom ports" },
       ]},
-      { id: "custom_ports", label: "Custom Ports", placeholder: "e.g., 8080, 8443, 1723", type: "text" },
+      { id: "custom_ports", label: "Custom Ports", placeholder: "e.g., 8080, 8443, 1723", type: "text", requiredIf: (v) => v.services === "custom" },
     ],
     promptBuilder: (v) => `Generate COMPLETE MikroTik firewall rules for RouterOS ${v.routeros_version}.
 
@@ -652,13 +677,16 @@ Include: installation, configuration, security, and how to connect after setup. 
         { value: "advanced", label: "Advanced - just commands" },
       ]},
     ],
-    promptBuilder: (v) => `Configure this setup: ${v.description}
+    promptBuilder: (v) => {
+      const experience = v.experience || "beginner";
+      return `Configure this setup: ${v.description}
 
 Devices: ${v.devices}
 Current: ${v.current_setup || "fresh setup"}
-Level: ${v.experience || "beginner"}
+Level: ${experience}
 
-Complete copy-paste scripts for every device. Tell me which tools to use. ${v.experience === "beginner" ? "Explain each command." : ""} Step by step, start with Step 1.`
+Complete copy-paste scripts for every device. Tell me which tools to use. ${experience === "beginner" ? "Explain each command." : ""} Step by step, start with Step 1.`;
+    }
   },
 ];
 
@@ -679,12 +707,15 @@ export const ScriptGenerator = ({ onSendToChat, onBack, onOpenSaved, onOpenPorta
     setFormValues(prev => ({ ...prev, [fieldId]: value }));
   };
 
+  const isFieldRequired = (field: TemplateField) =>
+    !!field.required || !!field.requiredIf?.(formValues);
+
   const handleGenerate = () => {
     if (!selectedTemplate) return;
     const missing = selectedTemplate.fields
-      .filter(f => f.required && !formValues[f.id]?.trim())
+      .filter(f => isFieldRequired(f) && !formValues[f.id]?.trim())
       .map(f => f.label);
-    
+
     if (missing.length > 0) {
       toast({
         title: "Missing required fields",
@@ -827,17 +858,19 @@ export const ScriptGenerator = ({ onSendToChat, onBack, onOpenSaved, onOpenPorta
             <div key={field.id} className="space-y-1.5">
               <Label className="text-sm font-medium">
                 {field.label}
-                {field.required && <span className="text-destructive ml-1">*</span>}
+                {isFieldRequired(field) && <span className="text-destructive ml-1">*</span>}
               </Label>
               {field.helpText && (
                 <p className="text-[11px] text-muted-foreground">{field.helpText}</p>
               )}
               {field.type === "text" && (
                 <Input
+                  type={field.sensitive ? "password" : "text"}
                   value={formValues[field.id] || ""}
                   onChange={e => handleFieldChange(field.id, e.target.value)}
                   placeholder={field.placeholder}
                   className="h-9 text-sm"
+                  autoComplete={field.sensitive ? "off" : undefined}
                 />
               )}
               {field.type === "textarea" && (
