@@ -34,6 +34,7 @@ interface SavedScriptsProps {
 
 // Detects «TBD:label», {{label}}, or <TBD:label> tokens.
 const PLACEHOLDER_RE = /«TBD:([^»]+)»|\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}|<TBD:([^>]+)>/g;
+
 function extractPlaceholders(content: string): string[] {
   const found = new Set<string>();
   let m: RegExpExecArray | null;
@@ -44,11 +45,23 @@ function extractPlaceholders(content: string): string[] {
   }
   return Array.from(found);
 }
+
 function applyPlaceholders(content: string, values: Record<string, string>): string {
   return content.replace(PLACEHOLDER_RE, (_, a, b, c) => {
     const k = (a || b || c || "").trim();
-    return values[k] ?? `«TBD:${k}»`;
+    const val = values[k];
+    // Prevent empty strings from breaking MikroTik syntax; revert to placeholder if empty
+    return (val !== undefined && val.trim() !== "") ? val : `«TBD:${k}»`;
   });
+}
+
+// Utility to ensure MikroTik scripts execute correctly (requires trailing newline and CRLF)
+function formatMikroTikScript(content: string): string {
+  let cleanContent = content.replace(/\r?\n/g, "\r\n");
+  if (!cleanContent.endsWith("\r\n")) {
+    cleanContent += "\r\n";
+  }
+  return cleanContent;
 }
 
 export const SavedScripts = ({ onBack, onOpenInChat }: SavedScriptsProps) => {
@@ -87,16 +100,20 @@ export const SavedScripts = ({ onBack, onOpenInChat }: SavedScriptsProps) => {
   };
 
   const copyScript = (content: string, id: string) => {
-    navigator.clipboard.writeText(content);
+    const cleanContent = formatMikroTikScript(content);
+    navigator.clipboard.writeText(cleanContent);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
     toast({ title: "Copied to clipboard" });
   };
 
   const downloadRsc = (script: SavedScript) => {
-    const content = editingDrafts[script.id] ?? script.script_content;
+    const rawContent = editingDrafts[script.id] ?? script.script_content;
+    const cleanContent = formatMikroTikScript(rawContent);
     const filename = script.title.replace(/[^a-zA-Z0-9_-]/g, "_") + ".rsc";
-    const blob = new Blob([content], { type: "text/plain" });
+    
+    // Explicit UTF-8 charset ensures special chars map to RouterOS correctly
+    const blob = new Blob([cleanContent], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = filename;
@@ -414,15 +431,25 @@ const ApplyToDeviceDialog = ({ target, onClose }: { target: SavedScript | null; 
     if (!target || !selected) return;
     const dev = devices.find(d => d.id === selected);
     if (!dev?.agent_id) { toast({ title: "Selected device has no paired agent", variant: "destructive" }); return; }
+    
     const remaining = extractPlaceholders(target.script_content);
     if (remaining.length > 0) {
       toast({ title: "Unfilled placeholders", description: `Fill these first: ${remaining.join(", ")}`, variant: "destructive" });
       return;
     }
+
     setSending(true);
+
+    // Normalize for API execution
+    let cleanScript = target.script_content.replace(/\r?\n/g, "\n");
+    if (!cleanScript.endsWith("\n")) {
+      cleanScript += "\n";
+    }
+
     const { data, error } = await supabase.functions.invoke("device-jobs", {
-      body: { device_id: selected, kind: "apply_script", script_content: target.script_content },
+      body: { device_id: selected, kind: "apply_script", script_content: cleanScript },
     });
+    
     setSending(false);
     if (error || !data?.job_id) { toast({ title: "Failed to enqueue", description: error?.message, variant: "destructive" }); return; }
     if (data.warning) toast({ title: "Agent offline", description: data.warning, variant: "destructive" });
