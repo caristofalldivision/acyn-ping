@@ -58,6 +58,174 @@ const SCENARIOS: ScenarioMeta[] = [
     defaults: { wan_interface: "ether1", provider: "centipid", provisioner_script: "" } },
 ];
 
+// ---- Validation helpers --------------------------------------------------
+
+const isIPv4 = (s: string) => {
+  const t = String(s ?? "").trim();
+  if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(t)) return false;
+  return t.split(".").every((o) => Number(o) >= 0 && Number(o) <= 255);
+};
+const isCIDR = (s: string) => {
+  const t = String(s ?? "").trim();
+  const parts = t.split("/");
+  if (parts.length !== 2) return false;
+  const [ip, mask] = parts;
+  return isIPv4(ip) && /^\d{1,2}$/.test(mask) && Number(mask) >= 0 && Number(mask) <= 32;
+};
+const isIPRange = (s: string) => {
+  const parts = String(s ?? "").trim().split("-");
+  if (parts.length !== 2) return false;
+  return isIPv4(parts[0]) && isIPv4(parts[1]);
+};
+const isRate = (s: string) => /^\d+(\.\d+)?[kKmMgG]?$/.test(String(s ?? "").trim());
+const isRatePair = (s: string) => {
+  const parts = String(s ?? "").trim().split("/");
+  return parts.length === 2 && parts.every(isRate);
+};
+const isPort = (s: string) => {
+  const n = Number(s);
+  return Number.isInteger(n) && n >= 1 && n <= 65535;
+};
+const nonEmpty = (s: any) => String(s ?? "").trim().length > 0;
+const csvNonEmpty = (s: any) =>
+  String(s ?? "").split(",").map((x) => x.trim()).filter(Boolean).length > 0;
+
+// Returns a map of field-key -> error message. Empty object means valid.
+function validateParams(scenario: ScenarioId, params: Record<string, any>): Record<string, string> {
+  const errors: Record<string, string> = {};
+  const req = (key: string, label: string) => {
+    if (!nonEmpty(params[key])) errors[key] = `${label} is required.`;
+  };
+
+  switch (scenario) {
+    case "nat_only":
+      req("wan_interface", "WAN interface");
+      req("lan_interface", "LAN interface");
+      if (!nonEmpty(params.lan_network)) errors.lan_network = "LAN network is required.";
+      else if (!isCIDR(params.lan_network)) errors.lan_network = "Use CIDR format, e.g. 192.168.88.0/24.";
+      if (!nonEmpty(params.lan_gateway)) errors.lan_gateway = "LAN gateway is required.";
+      else if (!isIPv4(params.lan_gateway)) errors.lan_gateway = "Enter a valid IPv4 address.";
+      if (!nonEmpty(params.pool_range)) errors.pool_range = "Pool range is required.";
+      else if (!isIPRange(params.pool_range)) errors.pool_range = "Use format start-end, e.g. 192.168.88.10-192.168.88.254.";
+      if (!csvNonEmpty(params.dns_servers)) errors.dns_servers = "At least one DNS server is required.";
+      break;
+
+    case "bridge_only":
+      req("bridge_name", "Bridge name");
+      if (!csvNonEmpty(params.ports)) errors.ports = "List at least one port.";
+      break;
+
+    case "wireless_only":
+      req("radio", "Radio interface");
+      req("ssid", "SSID");
+      req("country", "Country");
+      if (params.security && params.security !== "open") {
+        if (!nonEmpty(params.passphrase)) errors.passphrase = "Passphrase is required for secured networks.";
+        else if (String(params.passphrase).trim().length < 8) errors.passphrase = "WPA passphrases need at least 8 characters.";
+      }
+      break;
+
+    case "pppoe_client":
+      req("wan_interface", "WAN interface");
+      req("user", "Username");
+      req("password", "Password");
+      break;
+
+    case "pppoe_server":
+      req("listen_interface", "Listen interface");
+      if (!nonEmpty(params.local_ip)) errors.local_ip = "Server IP is required.";
+      else if (!isIPv4(params.local_ip)) errors.local_ip = "Enter a valid IPv4 address.";
+      if (!nonEmpty(params.pool_range)) errors.pool_range = "Pool range is required.";
+      else if (!isIPRange(params.pool_range)) errors.pool_range = "Use format start-end.";
+      req("profile_name", "Profile name");
+      if (nonEmpty(params.rate_limit) && !isRatePair(params.rate_limit) && !isRate(params.rate_limit)) {
+        errors.rate_limit = "Use rx/tx format, e.g. 5M/5M.";
+      }
+      break;
+
+    case "radius":
+      if (!nonEmpty(params.server_ip)) errors.server_ip = "RADIUS server IP is required.";
+      else if (!isIPv4(params.server_ip)) errors.server_ip = "Enter a valid IPv4 address.";
+      req("secret", "Shared secret");
+      if (!csvNonEmpty(params.services)) errors.services = "Select at least one service.";
+      break;
+
+    case "vlan":
+      req("bridge_name", "Bridge name");
+      if (!csvNonEmpty(params.trunk_ports)) errors.trunk_ports = "List at least one trunk port.";
+      if (!nonEmpty(params.vlans)) {
+        errors.vlans = "Define at least one VLAN.";
+      } else {
+        const bad = String(params.vlans)
+          .split(";")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .some((s) => {
+            const [id] = s.split(":");
+            const n = Number(id);
+            return !Number.isInteger(n) || n < 1 || n > 4094;
+          });
+        if (bad) errors.vlans = "Each VLAN needs a numeric id 1-4094 (id:name:ports;…).";
+      }
+      break;
+
+    case "dhcp_server":
+      req("interface", "Interface");
+      if (!nonEmpty(params.network)) errors.network = "Network is required.";
+      else if (!isCIDR(params.network)) errors.network = "Use CIDR format, e.g. 10.10.10.0/24.";
+      if (!nonEmpty(params.gateway)) errors.gateway = "Gateway is required.";
+      else if (!isIPv4(params.gateway)) errors.gateway = "Enter a valid IPv4 address.";
+      if (!nonEmpty(params.pool_range)) errors.pool_range = "Pool range is required.";
+      else if (!isIPRange(params.pool_range)) errors.pool_range = "Use format start-end.";
+      if (!csvNonEmpty(params.dns_servers)) errors.dns_servers = "At least one DNS server is required.";
+      break;
+
+    case "firewall_baseline":
+      req("wan_interface", "WAN interface");
+      break;
+
+    case "wireguard_server":
+      if (!nonEmpty(params.listen_port)) errors.listen_port = "Listen port is required.";
+      else if (!isPort(String(params.listen_port))) errors.listen_port = "Enter a port between 1 and 65535.";
+      if (!nonEmpty(params.address)) errors.address = "Tunnel address is required.";
+      else if (!isCIDR(params.address)) errors.address = "Use CIDR format, e.g. 10.222.0.1/24.";
+      if (nonEmpty(params.peers)) {
+        const bad = String(params.peers)
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .some((line) => !line.split("|")[0]?.trim());
+        if (bad) errors.peers = "Each peer needs a public key before the | separator.";
+      }
+      break;
+
+    case "qos_simple":
+      req("interface", "Interface");
+      if (!nonEmpty(params.max_upload)) errors.max_upload = "Max upload is required.";
+      else if (!isRate(params.max_upload)) errors.max_upload = "Use a value like 10M or 512k.";
+      if (!nonEmpty(params.max_download)) errors.max_download = "Max download is required.";
+      else if (!isRate(params.max_download)) errors.max_download = "Use a value like 50M or 1G.";
+      break;
+
+    case "ntp":
+      if (!csvNonEmpty(params.servers)) errors.servers = "At least one NTP server is required.";
+      break;
+
+    case "ddns":
+      break;
+
+    case "third_party":
+      req("wan_interface", "WAN interface");
+      req("provider", "Provider tag");
+      if (!nonEmpty(params.provisioner_script)) errors.provisioner_script = "Paste the provisioner script to run.";
+      break;
+  }
+
+  return errors;
+}
+
+// ---------------------------------------------------------------------------
+
 interface PlanStep {
   id: string; title: string; description: string;
   kind: "read" | "write"; requires_confirm: boolean;
@@ -75,6 +243,7 @@ export const ScenarioBuilder = ({ device, onBack }: Props) => {
   const [phase, setPhase] = useState<"pick" | "params" | "review" | "running">("pick");
   const [selected, setSelected] = useState<ScenarioMeta | null>(null);
   const [params, setParams] = useState<Record<string, any>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [plan, setPlan] = useState<Plan | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
@@ -84,14 +253,44 @@ export const ScenarioBuilder = ({ device, onBack }: Props) => {
   const pick = (s: ScenarioMeta) => {
     setSelected(s);
     setParams({ ...s.defaults });
+    setErrors({});
     setPhase("params");
+  };
+
+  const updateParam = (key: string, value: any) => {
+    setParams((p) => ({ ...p, [key]: value }));
+    setErrors((e) => {
+      if (!e[key]) return e;
+      const next = { ...e };
+      delete next[key];
+      return next;
+    });
   };
 
   const buildPlan = async () => {
     if (!selected) return;
+
+    const validationErrors = validateParams(selected.id, params);
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      toast({
+        title: "Check the highlighted fields",
+        description: "Some required values are missing or invalid.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setErrors({});
+
     setLoading(true);
     // Normalize a few list/struct fields.
     const p: any = { ...params };
+    // Trim stray whitespace on every string field — interface names, SSIDs,
+    // and IPs all need to match exactly on the router.
+    Object.keys(p).forEach((k) => {
+      if (typeof p[k] === "string") p[k] = p[k].trim();
+    });
+
     if (selected.id === "bridge_only") p.ports = String(p.ports || "").split(",").map((x: string) => x.trim()).filter(Boolean);
     if (selected.id === "vlan") {
       p.trunk_ports = String(p.trunk_ports || "").split(",").map((x: string) => x.trim()).filter(Boolean);
@@ -102,12 +301,12 @@ export const ScenarioBuilder = ({ device, onBack }: Props) => {
     }
     if (selected.id === "radius") p.services = String(p.services || "").split(",").map((x: string) => x.trim()).filter(Boolean);
     if (selected.id === "wireguard_server") {
+      p.listen_port = Number(p.listen_port);
       p.peers = String(p.peers || "").split("\n").map((line: string) => line.trim()).filter(Boolean).map((line: string) => {
         const [pk, ai] = line.split("|").map(x => x.trim());
         return { public_key: pk, allowed_ips: ai || "0.0.0.0/0" };
       });
     }
-    if (selected.id === "wireguard_server") p.listen_port = Number(p.listen_port);
 
     const { data, error } = await supabase.functions.invoke("wizard-scenarios", {
       body: { scenario: selected.id, params: p },
@@ -226,26 +425,26 @@ export const ScenarioBuilder = ({ device, onBack }: Props) => {
               </div>
               <div className="space-y-2">
                 {Object.keys(selected.defaults).map(key => (
-                  <Field key={key} label={prettyLabel(key, selected.id)}>
+                  <Field key={key} label={prettyLabel(key, selected.id)} error={errors[key]}>
                     {isTextarea(key) ? (
                       <Textarea
                         value={String(params[key] ?? "")}
-                        onChange={e => setParams(p => ({ ...p, [key]: e.target.value }))}
+                        onChange={e => updateParam(key, e.target.value)}
                         rows={key === "provisioner_script" ? 10 : 4}
-                        className="font-mono text-xs"
+                        className={`font-mono text-xs ${errors[key] ? "border-destructive focus-visible:ring-destructive/40" : ""}`}
                         placeholder={placeholderFor(key, selected.id)}
                       />
                     ) : isBoolean(key) ? (
                       <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" checked={!!params[key]} onChange={e => setParams(p => ({ ...p, [key]: e.target.checked }))} />
+                        <input type="checkbox" checked={!!params[key]} onChange={e => updateParam(key, e.target.checked)} />
                         Enable
                       </label>
                     ) : (
                       <input
                         value={String(params[key] ?? "")}
-                        onChange={e => setParams(p => ({ ...p, [key]: e.target.value }))}
+                        onChange={e => updateParam(key, e.target.value)}
                         placeholder={placeholderFor(key, selected.id)}
-                        className={inp}
+                        className={`${inp} ${errors[key] ? "border-destructive focus:ring-destructive/40" : ""}`}
                         type={key.includes("password") || key === "secret" || key === "passphrase" ? "password" : "text"}
                       />
                     )}
@@ -334,10 +533,11 @@ export const ScenarioBuilder = ({ device, onBack }: Props) => {
   );
 };
 
-const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
+const Field = ({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) => (
   <label className="block">
     <span className="text-xs text-muted-foreground mb-1 block">{label}</span>
     {children}
+    {error && <span className="text-[11px] text-destructive mt-1 block">{error}</span>}
   </label>
 );
 
